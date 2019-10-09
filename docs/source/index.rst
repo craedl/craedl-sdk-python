@@ -4,7 +4,7 @@ Craedl Python SDK Documentation
 Introduction
 ************
 
-The Craedl Python SDK (Software Development Kit) enables Craedl users to access their Craedl accounts using the Python programming language.
+The Craedl Python SDK (Software Development Kit) enables `Craedl.org <https://craedl.org>`_ users to access their Craedl accounts using the Python programming language.
 This provides a mechanism for using Craedl on computers without access to a web browser (such as a high-performance computing cluster) and to automate common Craedl project manipulations (such as file uploads and downloads) within a Python script.
 
 Quick start
