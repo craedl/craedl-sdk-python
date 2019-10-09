@@ -24,6 +24,8 @@ project = 'craedl-sdk-python'
 copyright = '2019, The Johns Hopkins University'
 author = 'Craedl.org'
 
+master_doc = 'index'
+
 # The full version, including alpha/beta/rc tags
 release = __version__
 
