@@ -338,6 +338,23 @@ class Profile(Auth):
         for k, v in data.items():
             setattr(self, k, v)
 
+    def create_project(self, name):
+        """
+        Create a new project belonging to this profile.
+
+        Use :meth:`Profile.get_project` to get the new project.
+
+        :param name: the name of the new project
+        :type name: string
+        :returns: this profile
+        """
+        data = {
+            'name': name,
+            'research_group': '',
+        }
+        response_data = self.POST('project/', data)
+        return self
+
     def get_project(self, name):
         """
         Get a particular project that belongs to this profile.
