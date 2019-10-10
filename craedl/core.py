@@ -157,28 +157,55 @@ class Directory(Auth):
         for k, v in data.items():
             setattr(self, k, v)
 
+    def __eq__(self, other):
+        if not isinstance(other, Directory):
+            return NotImplemented
+        equal = True
+        for i1, i2 in list(zip(vars(self).items(), vars(other).items())):
+            if i1[0] != i2[0] or i1[1] != i2[1]:
+                equal = False
+        return equal
+
     def create_directory(self, name):
         """
         Create a new directory contained within this directory.
+        
+        **Note:** This method returns the updated instance of this directory
+        (because it has a new child). The recommended usage is:
+
+        .. code-block:: python
+
+            home = home.create_directory('new-directory-name')
+
+        Use :meth:`Directory.get` to get the new directory.
 
         :param name: the name of the new directory
         :type name: string
-        :returns: the new directory
+        :returns: the updated instance of this directory
         """
         data = {
             'name': name,
             'parent': self.id,
         }
         response_data = self.POST('directory/', data)
-        return Directory(response_data['id'])
+        return Directory(self.id)
 
     def create_file(self, file_path):
         """
         Create a new file contained within this directory.
 
+        **Note:** This method returns the updated instance of this directory
+        (because it has a new child). The recommended usage is:
+
+        .. code-block:: python
+
+            home = home.create_file('/path/on/local/computer/to/read/data')
+
+        Use :meth:`Directory.get` to get the new file.
+
         :param file_path: the path to the file to be uploaded on your computer
         :type file_path: string
-        :returns: the new file
+        :returns: the updated instance of this directory
         """
         data = {
             'name': open_path.split('/')[-1],
@@ -186,33 +213,69 @@ class Directory(Auth):
             'size': os.path.getsize(file_path)
         }
         response_data = self.POST('file/', data)
-        F = File(response_data['id'])
         response_data2 = self.PUT_DATA(
-            'data/' + str(F.id) + '/',
+            'data/' + str(response_data['id']) + '/',
             open(file_path, 'rb')
         )
-        return F
+        return Directory(self.id)
 
     def get(self, path):
         """
-        Get a particular directory relative to this directory.
+        Get a particular directory or file. This can be an absolute or
+        relative path.
 
-        :param path: the relative path to this directory
+        :param path: the directory or file path
         :type path: string
-        :returns: the requested directory
+        :returns: the requested directory or file
         """
-        p = path.split('/')[0]
-        for c in self.children:
-            if p != c['name']:
-                sys.exit('ERROR: ' + p + ': No such file or directory')
+        if not path or path == '.':
+            return self
+        if path[0] == '/':
+            try:
+                return Directory(self.parent).get(path)
+            except errors.Not_Found_Error:
+                while path.startswith('/') or path.startswith('./'):
+                    if path.startswith('/'):
+                        path = path[1:]  # 1 = len('/')
+                    else:
+                        path = path[2:]  # 2 = len('./')
+                if not path or path == '.':
+                    return self
+                p = path.split('/')[0]
+                if p != self.name:
+                    raise FileNotFoundError(p + ': No such file or directory')
+                path = path[len(p):]
+                if not path:
+                    return self
+        while path.startswith('/') or path.startswith('./'):
+            if path.startswith('/'):
+                path = path[1:]  # 1 = len('/')
             else:
-                next_path = path.replace(p, '')
-                if len(next_path) > 0 and '/' == next_path[0]:
-                    next_path = next_path[1:]
-                if next_path:
-                    return Directory(c['id']).get(next_path)
+                path = path[2:]  # 2 = len('./')
+        if not path or path == '.':
+            return self
+        p = path.split('/')[0]
+        if p == '..':
+            path = path[2:]  # 2 = len('..')
+            while path.startswith('/'):
+                path = path[1:]  # 1 = len('/')
+            try:
+                return Directory(self.parent).get(path)
+            except errors.Not_Found_Error:
+                raise FileNotFoundError(p + ': No such file or directory')
+        for c in self.children:
+            if p == c['name']:
+                path = path[len(p):]
+                while path.startswith('/'):
+                    path = path[1:]  # 1 = len('/')
+                if path:
+                    return Directory(c['id']).get(path)
                 else:
-                    return Directory(c['id'])
+                    try:
+                        return Directory(c['id'])
+                    except errors.Not_Found_Error:
+                        return File(c['id'])
+        raise FileNotFoundError(p + ': No such file or directory')
 
     def list(self):
         """
@@ -309,19 +372,6 @@ class Project(Auth):
             if not (type(v) is dict or type(v) is list):
                 if not v == None:
                     setattr(self, k, v)
-
-    def create_publication(self, data):
-        """
-        Create a new publication in this project.
-
-        :param data: the data describing the new publication as described at
-            http://api.craedl.org
-        :type data: dict
-        :returns: the new publication
-        """
-        data['project'] = self.id
-        response_data = self.POST('publication/', data)
-        return Publication(response_data)
 
     def get_data(self):
         """

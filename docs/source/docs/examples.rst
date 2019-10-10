@@ -40,7 +40,10 @@ Upload data
     directory = home.get('path/to/data/in/Craedl')
 
     # create a new directory inside directory
-    directory_new = directory.create_directory('new-directory-name')
+    directory = directory.create_directory('new-directory-name')
+
+    # get the new directory
+    directory_new = directory.get('new-directory-name')
 
     # upload a new file into directory_new
-    file_new = directory_new.create_file('/path/on/local/computer/to/read/data')
+    directory_new = directory_new.create_file('/path/on/local/computer/to/read/data')
