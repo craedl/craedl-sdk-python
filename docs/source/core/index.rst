@@ -30,3 +30,8 @@ Publication
 ***********
 .. autoclass:: craedl.core.Publication
     :members:
+
+Research Group
+**************
+.. autoclass:: craedl.core.Research_Group
+    :members:
