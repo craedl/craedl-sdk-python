@@ -30,7 +30,7 @@ class Auth():
 
     def __init__(self):
         if not os.path.isfile(os.path.expanduser(self.token_path)):
-            sys.exit('ERROR: You have not configured an authentication token.\n       Use `craedl-token` to configure your authentication token.')
+            raise errors.Missing_Token_Error
     
     def __repr__(self):
         string = '{'
@@ -135,8 +135,7 @@ class Auth():
         elif response.status_code == 400:
             raise errors.Parse_Error(details=response.content.decode('ascii'))
         elif response.status_code == 401:
-            sys.exit('ERROR: Your token is invalid.\n       Use `craedl-token` to configure your authentication token.')
-            #raise errors.Invalid_Token_Error
+            raise errors.Invalid_Token_Error
         elif response.status_code == 403:
             raise errors.Unauthorized_Error
         elif response.status_code == 404:
