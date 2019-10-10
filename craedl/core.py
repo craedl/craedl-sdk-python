@@ -482,6 +482,23 @@ class Research_Group(Auth):
                 if not v == None:
                     setattr(self, k, v)
 
+    def create_project(self, name):
+        """
+        Create a new project belonging to this research group.
+
+        Use :meth:`Research_Group.get_project` to get the new project.
+
+        :param name: the name of the new project
+        :type name: string
+        :returns: this research group
+        """
+        data = {
+            'name': name,
+            'research_group': self.pk,
+        }
+        response_data = self.POST('project/', data)
+        return self
+
     def get_project(self, name):
         """
         Get a particular project that belongs to this research group.
