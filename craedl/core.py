@@ -180,8 +180,9 @@ class Directory(Auth):
         :type file_path: string
         :returns: the new file
         """
+        file_path = os.path.expanduser(file_path)
         data = {
-            'name': open_path.split('/')[-1],
+            'name': file_path.split('/')[-1],
             'parent': self.id,
             'size': os.path.getsize(file_path)
         }
@@ -249,6 +250,7 @@ class File(Auth):
         :type save_path: string
         :returns: this file
         """
+        save_path = os.path.expanduser(save_path)
         data = self.GET_DATA('data/' + str(self.id) + '/')
         try:
             f = open(save_path, 'wb')
@@ -273,6 +275,20 @@ class Profile(Auth):
         for k, v in data.items():
             setattr(self, k, v)
 
+    def get_project(self, name):
+        """
+        Get a particular project that belongs to this profile.
+
+        :param name: the name of the project
+        :type name: string
+        :returns: a project
+        """
+        projects = self.get_projects()
+        for project in projects:
+            if project.name == name:
+                return project
+        raise errors.Not_Found_Error
+
     def get_projects(self):
         """
         Get a list of projects that belong to this profile.
@@ -296,6 +312,28 @@ class Profile(Auth):
         for publication in data:
             publications.append(Publication(publication))
         return publications
+
+    def get_research_group(self, slug):
+        """
+        Get a particular research group.
+
+        :param slug: the unique slug in this research group's URL
+        :type slug: string
+        :returns: a research group
+        """
+        return Research_Group(slug)
+
+    def get_research_groups(self):
+        """
+        Get a list of research groups that this profile belongs to.
+
+        :returns: a list of research groups
+        """
+        data = self.GET('research_group/')
+        research_groups = list()
+        for research_group in data:
+            research_groups.append(Research_Group(research_group['slug']))
+        return research_groups
 
 class Project(Auth):
     """
@@ -335,7 +373,7 @@ class Project(Auth):
 
     def get_publications(self):
         """
-        Get the publications attached to this project.
+        Get a list of publications attached to this project.
 
         :returns: a list of this project's publications
         """
@@ -364,3 +402,54 @@ class Publication(Auth):
             else:
                 if not v == None:
                     setattr(self, k, v)
+
+class Research_Group(Auth):
+    """
+    A Craedl research group object.
+    """
+
+    def __init__(self, id):
+        super().__init__()
+        data = self.GET('research_group/' + str(id) + '/')
+        for k, v in data.items():
+            if not (type(v) is dict or type(v) is list):
+                if not v == None:
+                    setattr(self, k, v)
+
+    def get_project(self, name):
+        """
+        Get a particular project that belongs to this research group.
+
+        :param name: the name of the project
+        :type name: string
+        :returns: a project
+        """
+        projects = self.get_projects()
+        for project in projects:
+            if project.name == name:
+                return project
+        raise errors.Not_Found_Error
+
+    def get_projects(self):
+        """
+        Get a list of projects that belong to this research group.
+
+        :returns: a list of projects
+        """
+        data = self.GET('research_group/' + self.slug + '/projects/')
+        projects = list()
+        for project in data:
+            projects.append(Project(project['id']))
+        return projects
+
+    def get_publications(self):
+        """
+        Get a list of publications that belong to this research group.
+
+        :returns: a list of publications
+        """
+        data = self.GET('research_group/' + self.slug + '/publications/')
+        publications = list()
+        for publication in data:
+            publications.append(Publication(publication))
+        return publications
