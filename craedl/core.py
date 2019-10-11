@@ -26,7 +26,7 @@ class Auth():
     """
 
     base_url = 'https://api.craedl.org/'
-    token_path = '~/.config/craedl'
+    token_path = os.path.expanduser('~/.config/craedl')
 
     def __init__(self):
         if not os.path.isfile(os.path.expanduser(self.token_path)):

@@ -14,15 +14,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import getpass
 import os
+import stat
 import sys
 
-token_path = '~/.config/craedl'
+token_path = os.path.expanduser('~/.config/craedl')
 argv = sys.argv
 
-if len(argv) != 2:
-    sys.exit('usage: craedl-token <API-access-token>')
+if len(argv) > 1:
+    sys.exit('craedl-token configures your Craedl authentication token, which you can obtain\nfrom your Craedl account. Visit https://craedl.org/docs#api-access for more information.')
+
 else:
-    f = open(os.path.expanduser(token_path), 'w+')
-    f.write(argv[1])
+    token = getpass.getpass('Enter your token: ')
+
+    if len(token) != 40:
+        sys.exit('The provided token is invalid.')
+
+    if not os.path.exists(os.path.basename(token_path)):
+        os.makedirs(os.path.basename(token_path))
+        
+    f = open(token_path, 'w+')
+    f.write(token)
     f.close()
+
+    os.chmod(token_path, stat.S_IREAD | stat.S_IWRITE)
