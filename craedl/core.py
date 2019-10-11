@@ -30,7 +30,7 @@ class Auth():
         token_path = os.path.abspath(os.path.join(os.sep, 'Users',
             os.getlogin(), 'AppData', 'Local', 'Craedl', 'craedl'))
     else:
-        token_path = os.path.expanduser('~/.config/craedl')
+        token_path = os.path.expanduser('~/.config/Craedl/craedl')
 
     def __init__(self):
         if not os.path.isfile(os.path.expanduser(self.token_path)):
