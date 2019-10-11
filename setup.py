@@ -38,7 +38,9 @@ setuptools.setup(
     install_requires=[
         'requests',
     ],
-    scripts=[
-        'craedl/bin/craedl-token',
-    ],
+    entry_points = {
+        'console_scripts': [
+            'craedl-token=craedl.__main__:main',
+        ],
+    },
 )

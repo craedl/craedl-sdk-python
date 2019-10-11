@@ -25,8 +25,15 @@ class Auth():
     needs to perform RESTful API communications should extend this class.
     """
 
+    if sys.platform == 'win32':
+        token_path = os.path.abspath(os.path.join(os.sep, 'Users',
+            os.getlogin(), 'AppData', 'Local', 'Craedl', 'craedl'))
+    elif sys.platform == 'darwin':
+        token_path = os.path.abspath(os.path.join(os.sep, 'Users',
+            os.getlogin(), 'Library', 'Preferences', 'Craedl', 'craedl'))
+    else:
+        token_path = os.path.expanduser('~/.config/Craedl/craedl')
     base_url = 'https://api.craedl.org/'
-    token_path = os.path.expanduser('~/.config/craedl')
 
     def __init__(self):
         if not os.path.isfile(os.path.expanduser(self.token_path)):

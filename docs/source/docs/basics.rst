@@ -30,11 +30,11 @@ Configure your authentication token
 ***********************************
 
 Retrieve your API access token from your Craedl account by logging into `Craedl.org <https://craedl.org>`_ and clicking the key icon in the ``My Craedl`` card.
-Generate a token, represented below by ``<API-access-token>``, and run:
+Generate a token and pass it to the following command when prompted:
 
 .. code-block:: bash
 
-    craedl-token <API-access-token>
+    python -m craedl
 
 As long as you don't revoke this token or generate a new one, you will only have to perform this step once every 28 days.
 Should you have reason to worry that your token has been compromised, simply generate a new one in Craedl and re-run the command above to re-enable your Craedl Python SDK authentication.
