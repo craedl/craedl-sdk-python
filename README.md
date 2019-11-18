@@ -16,7 +16,7 @@ Get started with the Craedl Python SDK by obtaining it via
 pip install craedl
 ```
 
-Log into your Craedl account at [Craedl.org] and generate an API access token by
+Log into your Craedl account at [Craedl.org](https://craedl.org) and generate an API access token by
 clicking the key icon in the `My Craedl` card. Copy your token and paste it when
 prompted after running the following command:
 
