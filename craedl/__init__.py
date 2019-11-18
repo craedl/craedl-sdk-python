@@ -14,7 +14,7 @@
 
 from craedl.core import Profile
 
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 
 def auth():
     return Profile()

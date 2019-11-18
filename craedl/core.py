@@ -19,6 +19,8 @@ import sys
 
 from craedl import errors
 
+BUF_SIZE = 104857600
+
 class Auth():
     """
     This base class handles low-level RESTful API communications. Any class that
@@ -100,14 +102,18 @@ class Auth():
             an HTML error string if the response does not have status 200
         """
         token = open(os.path.expanduser(self.token_path)).readline().strip()
-        response = requests.put(
-            self.base_url + path,
-            data=data,
-            headers={
-                'Authorization': 'Bearer %s' % token,
-                'Content-Disposition': 'attachment; filename="craedl-upload"',
-            },
-        )
+        while True:
+            d = data.read(BUF_SIZE)
+            if not d:
+                break
+            response = requests.put(
+                self.base_url + path,
+                data=d,
+                headers={
+                    'Authorization': 'Bearer %s' % token,
+                    'Content-Disposition': 'attachment; filename="craedl-upload"',
+                },
+            )
         return self.process_response(response)
 
     def GET_DATA(self, path):

@@ -24,7 +24,7 @@ class Connection_Refused_Error(Exception):
 class Invalid_Token_Error(Exception):
     def __init__(self):
         self.message = 'Your configured authentication token is invalid.\n'
-        self.message += '  Use `craedl-token` to configure your authentication token.'
+        self.message += '  Use `python -m craedl` to configure your authentication token.'
 
     def __str__(self):
         return self.message
@@ -32,7 +32,7 @@ class Invalid_Token_Error(Exception):
 class Missing_Token_Error(Exception):
     def __init__(self):
         self.message = 'You have not configured an authentication token.\n'
-        self.message += '  Use `craedl-token` to configure your authentication token.'
+        self.message += '  Use `python -m craedl` to configure your authentication token.'
 
     def __str__(self):
         return self.message
