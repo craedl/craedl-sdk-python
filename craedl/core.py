@@ -102,10 +102,15 @@ class Auth():
             an HTML error string if the response does not have status 200
         """
         token = open(os.path.expanduser(self.token_path)).readline().strip()
-        while True:
+
+        # Alternatively, return None or {}
+        empty = not data.peek()
+        if empty:
+           raise errors.File_Error(details=data.name)
+
+        while not empty:
             d = data.read(BUF_SIZE)
-            if not d:
-                break
+            empty = not data.peek()
             response = requests.put(
                 self.base_url + path,
                 data=d,
