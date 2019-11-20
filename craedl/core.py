@@ -3,9 +3,9 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -40,7 +40,7 @@ class Auth():
     def __init__(self):
         if not os.path.isfile(os.path.expanduser(self.token_path)):
             raise errors.Missing_Token_Error
-    
+
     def __repr__(self):
         string = '{'
         for k, v in vars(self).items():
@@ -186,7 +186,7 @@ class Directory(Auth):
     def create_directory(self, name):
         """
         Create a new directory contained within this directory.
-        
+
         **Note:** This method returns the updated instance of this directory
         (because it has a new child). The recommended usage is:
 
