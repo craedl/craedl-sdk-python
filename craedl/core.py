@@ -227,7 +227,8 @@ class Directory(Auth):
         }
         response_data = self.POST('file/', data)
         response_data2 = self.PUT_DATA(
-            'data/' + str(response_data['id']) + '/',
+            ('data/' + str(response_data['id']) + '/?vid=' +
+                    str(response_data['vid'])),
             open(file_path, 'rb')
         )
         return Directory(self.id)
