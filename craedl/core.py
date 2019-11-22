@@ -3,9 +3,9 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -40,7 +40,7 @@ class Auth():
     def __init__(self):
         if not os.path.isfile(os.path.expanduser(self.token_path)):
             raise errors.Missing_Token_Error
-    
+
     def __repr__(self):
         string = '{'
         for k, v in vars(self).items():
@@ -89,31 +89,41 @@ class Auth():
         )
         return self.process_response(response)
 
-    def PUT_DATA(self, path, data):
+    def PUT_DATA(self, path, file_path):
         """
         Handle a data PUT request.
 
         :param path: the RESTful API method path
         :type path: string
-        :param data: the data to POST to the RESTful API method as described at
+        :param file_path: the data to POST to the RESTful API method as described at
             https://api.craedl.org
-        :type data: dict
+        :type file_path: string
         :returns: a dict containing the contents of the parsed JSON response or
             an HTML error string if the response does not have status 200
         """
         token = open(os.path.expanduser(self.token_path)).readline().strip()
-        while True:
+        with open(file_path, 'rb') as data:
             d = data.read(BUF_SIZE)
-            if not d:
-                break
-            response = requests.put(
-                self.base_url + path,
-                data=d,
-                headers={
-                    'Authorization': 'Bearer %s' % token,
-                    'Content-Disposition': 'attachment; filename="craedl-upload"',
-                },
-            )
+            if d:
+                while d:
+                    response = requests.put(
+                        self.base_url + path,
+                        data=d,
+                        headers={
+                            'Authorization': 'Bearer %s' % token,
+                            'Content-Disposition': 'attachment; filename="craedl-upload"',
+                        },
+                    )
+                    d = data.read(BUF_SIZE)
+            else: # force request for empty file
+                response = requests.put(
+                    self.base_url + path,
+                    # no data
+                    headers={
+                        'Authorization': 'Bearer %s' % token,
+                        'Content-Disposition': 'attachment; filename="craedl-upload"',
+                    },
+                )
         return self.process_response(response)
 
     def GET_DATA(self, path):
@@ -181,7 +191,7 @@ class Directory(Auth):
     def create_directory(self, name):
         """
         Create a new directory contained within this directory.
-        
+
         **Note:** This method returns the updated instance of this directory
         (because it has a new child). The recommended usage is:
 
@@ -228,7 +238,7 @@ class Directory(Auth):
         response_data = self.POST('file/', data)
         response_data2 = self.PUT_DATA(
             'data/%d/?vid=%d' % (response_data['id'], response_data['vid']),
-            open(file_path, 'rb')
+            file_path
         )
         return Directory(self.id)
 
