@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import glob
 import json
 import os
 import requests
@@ -212,36 +213,6 @@ class Directory(Auth):
         response_data = self.POST('directory/', data)
         return Directory(self.id)
 
-    def create_file(self, file_path):
-        """
-        Create a new file contained within this directory.
-
-        **Note:** This method returns the updated instance of this directory
-        (because it has a new child). The recommended usage is:
-
-        .. code-block:: python
-
-            home = home.create_file('/path/on/local/computer/to/read/data')
-
-        Use :meth:`Directory.get` to get the new file.
-
-        :param file_path: the path to the file to be uploaded on your computer
-        :type file_path: string
-        :returns: the updated instance of this directory
-        """
-        file_path = os.path.expanduser(file_path)
-        data = {
-            'name': file_path.split('/')[-1],
-            'parent': self.id,
-            'size': os.path.getsize(file_path)
-        }
-        response_data = self.POST('file/', data)
-        response_data2 = self.PUT_DATA(
-            'data/%d/?vid=%d' % (response_data['id'], response_data['vid']),
-            file_path
-        )
-        return Directory(self.id)
-
     def get(self, path):
         """
         Get a particular directory or file. This can be an absolute or
@@ -314,6 +285,90 @@ class Directory(Auth):
             else:
                 files.append(File(c['id']))
         return (dirs, files)
+
+    def upload_file(self, file_path):
+        """
+        Upload a new file contained within this directory.
+
+        **Note:** This method returns the updated instance of this directory
+        (because it has a new child). The recommended usage is:
+
+        .. code-block:: python
+
+            home = home.upload_file('/path/on/local/computer/to/read/data')
+
+        Use :meth:`Directory.get` to get the new file.
+
+        :param file_path: the path to the file to be uploaded on your computer
+        :type file_path: string
+        :returns: the updated instance of this directory
+        """
+        file_path = os.path.expanduser(file_path)
+        data = {
+            'name': file_path.split('/')[-1],
+            'parent': self.id,
+            'size': os.path.getsize(file_path)
+        }
+        response_data = self.POST('file/', data)
+        response_data2 = self.PUT_DATA(
+            'data/%d/?vid=%d' % (response_data['id'], response_data['active_version']),
+            file_path
+        )
+        return Directory(self.id)
+
+    def upload_directory(self, directory_path):
+        """
+        Upload a new directory contained within this directory.
+
+        **Note:** This method returns the updated instance of this directory
+        (because it has a new child). The recommended usage is:
+
+        .. code-block:: python
+
+            home = home.upload_directory('/path/on/local/computer/to/read/data')
+
+        Use :meth:`Directory.get` to get the new directory.
+
+        :param directory_path: the path to the directory to be uploaded on your
+            computer
+        :type directory_path: string
+        :returns: the updated instance of this directory
+        """
+        directory_path = os.path.expanduser(directory_path)
+        # create directories first
+        print('Creating directory structure...')
+        dirs = glob.glob(directory_path + '/**/', recursive=True)
+        root = '/'.join(dirs[0].split('/')[:-2]) + '/'
+        pointer = root
+        pwd = self
+        N = len(dirs)
+        i = 0
+        for d in dirs:
+            i = i + 1
+            path_relative = d.replace(pointer, '')[:-1]
+            if len(path_relative.split('/')) > 1:
+                pointer = '/'.join(d.split('/')[:-2]) + '/'
+                pwd = pwd.get(path_relative.split('/')[0])
+                path_relative = d.replace(pointer, '')[:-1]
+            pwd = pwd.create_directory(path_relative)
+            print('\r%.0f%%' % (i/N * 100), end='')
+        new_self = Directory(self.id) # refresh self
+        print('...done.')
+        print('Uploading files...')
+        files = glob.glob(directory_path + '/**', recursive=True)
+        # upload files
+        N = len(files)
+        i = 0
+        for f in files:
+            i = i + 1
+            if os.path.isfile(f):
+                path_relative = f.replace(root, '')
+                split = path_relative.split('/')
+                base = '/'.join(split[:-1])
+                pwd = new_self.get(base)
+                pwd.upload_file(f)
+            print('\r%.0f%%' % (i/N * 100), end='')
+        print('...done.')
 
 class File(Auth):
     """

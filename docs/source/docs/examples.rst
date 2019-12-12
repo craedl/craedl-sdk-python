@@ -46,4 +46,4 @@ Upload data
     directory_new = directory.get('new-directory-name')
 
     # upload a new file into directory_new
-    directory_new = directory_new.create_file('/path/on/local/computer/to/read/data')
+    directory_new = directory_new.upload_file('/path/on/local/computer/to/read/data')
