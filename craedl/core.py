@@ -380,13 +380,16 @@ class Directory(Auth):
         for child in os.scandir(directory_path):
             if child.is_file(): # upload file
                 print('Upload %s...' % (child.path), end='', flush=True)
-                new_dir.upload_file(child.path)
-                new_size = os.path.getsize(child.path)
-                size = size + new_size
-                print('uploaded %s (%s total).' % (
-                    to_x_bytes(new_size),
-                    to_x_bytes(size)
-                ), flush=True)
+                try:
+                    new_dir.upload_file(child.path)
+                    new_size = os.path.getsize(child.path)
+                    size = size + new_size
+                    print('uploaded %s (%s total).' % (
+                        to_x_bytes(new_size),
+                        to_x_bytes(size)
+                    ), flush=True)
+                except errors.Parse_Error:
+                    print('ERROR: file ignored (starts with forbidden character).')
             else: # create directory and recurse
                 new_dir.upload_directory_recurse(child.path, size)
 
