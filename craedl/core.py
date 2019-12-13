@@ -373,6 +373,7 @@ class Directory(Auth):
         :param size: the total size uploaded from the entry to the recursion
         :type size: int
         """
+        this_size = 0
         print('Create %s...' % (directory_path), end='', flush=True)
         self = self.create_directory(os.path.basename(directory_path))
         new_dir = self.get(os.path.basename(directory_path))
@@ -383,15 +384,19 @@ class Directory(Auth):
                 try:
                     new_dir.upload_file(child.path)
                     new_size = os.path.getsize(child.path)
-                    size = size + new_size
+                    this_size = this_size + new_size
                     print('uploaded %s (%s total).' % (
                         to_x_bytes(new_size),
-                        to_x_bytes(size)
+                        to_x_bytes(size + this_size)
                     ), flush=True)
                 except errors.Parse_Error:
                     print('ERROR: file ignored (starts with forbidden character).')
             else: # create directory and recurse
-                new_dir.upload_directory_recurse(child.path, size)
+                this_size = this_size + new_dir.upload_directory_recurse(
+                    child.path,
+                    size + this_size
+                )
+        return this_size
 
 class File(Auth):
     """
