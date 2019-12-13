@@ -22,6 +22,30 @@ from craedl import errors
 
 BUF_SIZE = 104857600
 
+def to_x_bytes(bytes):
+    """
+    Take a number in bytes and return a human-readable string.
+
+    :param bytes: number in bytes
+    :type bytes: int
+    :returns: a human-readable string
+    """
+    x_bytes = bytes
+    power = 0
+    while x_bytes >= 1000:
+        x_bytes = x_bytes * 0.001
+        power = power + 3
+    if power == 0:
+        return '%.0f bytes' % x_bytes
+    if power == 3:
+        return '%.0f kB' % x_bytes
+    if power == 6:
+        return '%.0f MB' % x_bytes
+    if power == 9:
+        return '%.0f GB' % x_bytes
+    if power == 12:
+        return '%.0f TB' % x_bytes
+
 class Auth():
     """
     This base class handles low-level RESTful API communications. Any class that
@@ -335,40 +359,36 @@ class Directory(Auth):
         :returns: the updated instance of this directory
         """
         directory_path = os.path.expanduser(directory_path)
-        # create directories first
-        print('Creating directory structure...')
-        dirs = glob.glob(directory_path + '/**/', recursive=True)
-        root = '/'.join(dirs[0].split('/')[:-2]) + '/'
-        pointer = root
-        pwd = self
-        N = len(dirs)
-        i = 0
-        for d in dirs:
-            i = i + 1
-            path_relative = d.replace(pointer, '')[:-1]
-            if len(path_relative.split('/')) > 1:
-                pointer = '/'.join(d.split('/')[:-2]) + '/'
-                pwd = pwd.get(path_relative.split('/')[0])
-                path_relative = d.replace(pointer, '')[:-1]
-            pwd = pwd.create_directory(path_relative)
-            print('\r%.0f%%' % (i/N * 100), end='')
-        new_self = Directory(self.id) # refresh self
-        print('...done.')
-        print('Uploading files...')
-        files = glob.glob(directory_path + '/**', recursive=True)
-        # upload files
-        N = len(files)
-        i = 0
-        for f in files:
-            i = i + 1
-            if os.path.isfile(f):
-                path_relative = f.replace(root, '')
-                split = path_relative.split('/')
-                base = '/'.join(split[:-1])
-                pwd = new_self.get(base)
-                pwd.upload_file(f)
-            print('\r%.0f%%' % (i/N * 100), end='')
-        print('...done.')
+        self = self.upload_directory_recurse(directory_path, 0)
+        return self
+
+    def upload_directory_recurse(self, directory_path, size):
+        """
+        A helper function for directory uploads that performs the recursion
+        through child directories and reports size transferred.
+
+        :param directory_path: the path to the directory to be uploaded on your
+            computer
+        :type directory_path: string
+        :param size: the total size uploaded from the entry to the recursion
+        :type size: int
+        """
+        print('Create %s...' % (directory_path), end='', flush=True)
+        self = self.create_directory(os.path.basename(directory_path))
+        new_dir = self.get(os.path.basename(directory_path))
+        print('done.', flush=True)
+        for child in os.scandir(directory_path):
+            if child.is_file(): # upload file
+                print('Upload %s...' % (child.path), end='', flush=True)
+                new_dir.upload_file(child.path)
+                new_size = os.path.getsize(child.path)
+                size = size + new_size
+                print('uploaded %s (%s total).' % (
+                    to_x_bytes(new_size),
+                    to_x_bytes(size)
+                ), flush=True)
+            else: # create directory and recurse
+                new_dir.upload_directory_recurse(child.path, size)
 
 class File(Auth):
     """
