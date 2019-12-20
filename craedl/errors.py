@@ -59,6 +59,13 @@ class Parse_Error(Exception):
     def __str__(self):
         return self.message + ' ' + self.details
 
+class Retry_Max_Error(Exception):
+    def __init__(self, details=None):
+        self.message = 'Exceeded maximum number of retries. Check network connection.'
+
+    def __str__(self):
+        return self.message
+
 class Server_Error(Exception):
     def __init__(self, details=None):
         self.message = 'The server at https://api.craedl.org has encountered an error.'

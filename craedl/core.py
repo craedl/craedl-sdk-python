@@ -12,15 +12,57 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from datetime import datetime
+from datetime import timezone
 import glob
 import json
 import os
 import requests
 import sys
+import time
 
 from craedl import errors
 
 BUF_SIZE = 104857600
+RETRY_MAX = 5
+RETRY_SLEEP = 1
+
+def get_numbered_upload(parent, childname):
+    """
+    If a File/Directory comes back instead of a Directory/File, we know this
+    directory was created with the same name as an
+    existing file and had a number appended to its name
+    like this: 'childname' --> 'childname (1)'.
+    We must find the matching directory with the highest
+    number and get that as a replacement.
+
+    :param parent: the parent directory
+    :type parent: Directory
+    :param childname: the name of the new child
+    :type childname: string
+    """
+    match_num = 0
+    for c in parent.children:
+        if (childname in c['name'] and childname != c['name']):
+            num = int(c['name'].replace(childname + ' (', '' ).replace(')', ''))
+            if num > match_num:
+                match_num = num
+    return self.get('%s (%d)' % (childname, match_num))
+
+def read_from_log(logfile):
+    """
+    Read the message in the next line of the log.
+
+    :param logfile: the logfile
+    :type logfile: File
+    :returns: a tuple containg the message and the timestamp
+    """
+    log = logfile.readline()
+    if log == '':
+        return (None, None)
+    timestamp = datetime.fromisoformat(log[:32])
+    message = log[33:]
+    return (message, timestamp)
 
 def to_x_bytes(bytes):
     """
@@ -46,11 +88,26 @@ def to_x_bytes(bytes):
     if power == 12:
         return '%.0f TB' % x_bytes
 
+def write_to_log(log_path, message):
+    """
+    Write a message to the log. Automatically prepends the timestamp.
+
+    :param log_path: absolute path to the logfile
+    :type log_path: string
+    :param message: the message to write to the logfile
+    :type message: string
+    """
+    print(datetime.now(timezone.utc).isoformat() + ' ' + message, end='', flush=True)
+    f = open(log_path, 'a+')
+    f.write(datetime.now(timezone.utc).isoformat() + ' ' + message)
+    f.close()
+
 class Auth():
     """
     This base class handles low-level RESTful API communications. Any class that
     needs to perform RESTful API communications should extend this class.
     """
+    base_url = 'https://api.craedl.org/'
 
     if sys.platform == 'win32':
         token_path = os.path.abspath(os.path.join(os.sep, 'Users',
@@ -60,7 +117,6 @@ class Auth():
             os.getlogin(), 'Library', 'Preferences', 'Craedl', 'craedl'))
     else:
         token_path = os.path.expanduser('~/.config/Craedl/craedl')
-    base_url = 'https://api.craedl.org/'
 
     def __init__(self):
         if not os.path.isfile(os.path.expanduser(self.token_path)):
@@ -88,11 +144,18 @@ class Auth():
             an HTML error string if the response does not have status 200
         """
         token = open(os.path.expanduser(self.token_path)).readline().strip()
-        response = requests.get(
-            self.base_url + path,
-            headers={'Authorization': 'Bearer %s' % token},
-        )
-        return self.process_response(response)
+        attempt = 0
+        while attempt < RETRY_MAX:
+            attempt = attempt + 1
+            try:
+                response = requests.get(
+                    self.base_url + path,
+                    headers={'Authorization': 'Bearer %s' % token},
+                )
+                return self.process_response(response)
+            except requests.exceptions.ConnectionError:
+                time.sleep(RETRY_SLEEP)
+        raise errors.Retry_Max_Error
 
     def POST(self, path, data):
         """
@@ -107,12 +170,19 @@ class Auth():
             an HTML error string if the response does not have status 200
         """
         token = open(os.path.expanduser(self.token_path)).readline().strip()
-        response = requests.post(
-            self.base_url + path,
-            json=data,
-            headers={'Authorization': 'Bearer %s' % token},
-        )
-        return self.process_response(response)
+        attempt = 0
+        while attempt < RETRY_MAX:
+            attempt = attempt + 1
+            try:
+                response = requests.post(
+                    self.base_url + path,
+                    json=data,
+                    headers={'Authorization': 'Bearer %s' % token},
+                )
+                return self.process_response(response)
+            except requests.exceptions.ConnectionError:
+                time.sleep(RETRY_SLEEP)
+        raise errors.Retry_Max_Error
 
     def PUT_DATA(self, path, file_path):
         """
@@ -131,25 +201,42 @@ class Auth():
             d = data.read(BUF_SIZE)
             if d:
                 while d:
-                    response = requests.put(
-                        self.base_url + path,
-                        data=d,
-                        headers={
-                            'Authorization': 'Bearer %s' % token,
-                            'Content-Disposition': 'attachment; filename="craedl-upload"',
-                        },
-                    )
+                    attempt = 0
+                    while attempt < RETRY_MAX:
+                        attempt = attempt + 1
+                        try:
+                            response = requests.put(
+                                self.base_url + path,
+                                data=d,
+                                headers={
+                                    'Authorization': 'Bearer %s' % token,
+                                    'Content-Disposition': 'attachment; filename="craedl-upload"',
+                                },
+                            )
+                            break
+                        except requests.exceptions.ConnectionError:
+                            time.sleep(RETRY_SLEEP)
+                    if attempt >= RETRY_MAX:
+                        raise errors.Retry_Max_Error
                     d = data.read(BUF_SIZE)
+                return self.process_response(response)
             else: # force request for empty file
-                response = requests.put(
-                    self.base_url + path,
-                    # no data
-                    headers={
-                        'Authorization': 'Bearer %s' % token,
-                        'Content-Disposition': 'attachment; filename="craedl-upload"',
-                    },
-                )
-        return self.process_response(response)
+                attempt = 0
+                while attempt < RETRY_MAX:
+                    attempt = attempt + 1
+                    try:
+                        response = requests.put(
+                            self.base_url + path,
+                            # no data
+                            headers={
+                                'Authorization': 'Bearer %s' % token,
+                                'Content-Disposition': 'attachment; filename="craedl-upload"',
+                            },
+                        )
+                        return self.process_response(response)
+                    except requests.exceptions.ConnectionError:
+                        time.sleep(RETRY_SLEEP)
+                raise errors.Max_Retry_Error
 
     def GET_DATA(self, path):
         """
@@ -160,12 +247,19 @@ class Auth():
         :returns: the data stream being downloaded
         """
         token = open(os.path.expanduser(self.token_path)).readline().strip()
-        response = requests.get(
-            self.base_url + path,
-            headers={'Authorization': 'Bearer %s' % token},
-            stream=True,
-        )
-        return response
+        attempt = 0
+        while attempt < RETRY_MAX:
+            attempt = attempt + 1
+            try:
+                response = requests.get(
+                    self.base_url + path,
+                    headers={'Authorization': 'Bearer %s' % token},
+                    stream=True,
+                )
+                return response
+            except requests.exceptions.ConnectionError:
+                time.sleep(RETRY_SLEEP)
+        raise errors.Retry_Max_Error
 
     def process_response(self, response):
         """
@@ -340,9 +434,14 @@ class Directory(Auth):
         )
         return Directory(self.id)
 
-    def upload_directory(self, directory_path):
+    def upload_directory(
+        self,
+        directory_path,
+        follow_symlinks=False
+    ):
         """
-        Upload a new directory contained within this directory.
+        Upload a new directory contained within this directory. It generates a
+        log file in the `directory_path` containing 
 
         **Note:** This method returns the updated instance of this directory
         (because it has a new child). The recommended usage is:
@@ -356,13 +455,72 @@ class Directory(Auth):
         :param directory_path: the path to the directory to be uploaded on your
             computer
         :type directory_path: string
+        :param follow_symlinks: whether to follow symlinks (default False)
+        :type follow_symlinks: bool
         :returns: the updated instance of this directory
         """
         directory_path = os.path.expanduser(directory_path)
-        self = self.upload_directory_recurse(directory_path, 0)
-        return self
+        log_path = '%s/craedl-upload-%s.log' % (
+            directory_path,
+            datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
+        )
 
-    def upload_directory_recurse(self, directory_path, size):
+        ls = glob.glob(directory_path + '/*')
+        history_path = None
+        history_file = None
+        for item in sorted(ls):
+            if 'craedl-upload' in item and 'log' in item:
+                history_path = item
+        if history_path:
+            history_file = open(history_path, 'r')
+            write_to_log(log_path, 'OLDLOG READ %s\n' % history_path)
+
+        history = None
+        if history_file:
+            (history, timestamp) = read_from_log(history_file)
+        if history_file and 'OLDLOG READ' in history:
+            (history, timestamp) = read_from_log(history_file)
+
+        if not os.path.isdir(directory_path):
+            print('Failure: %s is not a directory.' % directory_path)
+            exit()
+        else:
+            action = 'CREATE INIT %s/\n' % directory_path
+            action_skip = 'CREATE SKIP %s/\n' % directory_path
+            if history and (
+                history == action or history == action_skip
+            ):
+                write_to_log(log_path, action_skip)
+                read_from_log(history_file)
+            else:
+                write_to_log(log_path, action)
+                self = self.create_directory(os.path.basename(directory_path))
+            new_dir = self.get(os.path.basename(directory_path))
+            if type(new_dir) == File:
+                # handle case where a directory replaced a file of the same name
+                new_dir = get_numbered_upload(
+                    self,
+                    os.path.basename(directory_path)
+                )
+            write_to_log(log_path, 'CREATE DONE\n')
+
+            new_dir.upload_directory_recurse(
+                directory_path,
+                log_path,
+                history_file,
+                0,
+                follow_symlinks
+            )
+            return Directory(self.id)
+
+    def upload_directory_recurse(
+        self,
+        directory_path,
+        log_path,
+        history_file,
+        size,
+        follow_symlinks
+    ):
         """
         A helper function for directory uploads that performs the recursion
         through child directories and reports size transferred.
@@ -370,33 +528,129 @@ class Directory(Auth):
         :param directory_path: the path to the directory to be uploaded on your
             computer
         :type directory_path: string
+        :param log_path: the absolute path to the upload log file
+        :type log_path: string
+        :param history_file: the (open) historical log file, or None if does not
+            exist
+        :type history_file: File
         :param size: the total size uploaded from the entry to the recursion
         :type size: int
+        :param follow_symlinks: whether to follow symlinks
+        :type follow_symlinks: bool
         """
         this_size = 0
-        print('Create %s...' % (directory_path), end='', flush=True)
-        self = self.create_directory(os.path.basename(directory_path))
-        new_dir = self.get(os.path.basename(directory_path))
-        print('done.', flush=True)
-        for child in os.scandir(directory_path):
-            if child.is_file(): # upload file
-                print('Upload %s...' % (child.path), end='', flush=True)
-                try:
-                    new_dir.upload_file(child.path)
-                    new_size = os.path.getsize(child.path)
-                    this_size = this_size + new_size
-                    print('uploaded %s (%s total).' % (
-                        to_x_bytes(new_size),
-                        to_x_bytes(size + this_size)
-                    ), flush=True)
-                except errors.Parse_Error:
-                    print('ERROR: file ignored (starts with forbidden character).')
-            else: # create directory and recurse
-                this_size = this_size + new_dir.upload_directory_recurse(
-                    child.path,
-                    size + this_size
-                )
-        return this_size
+        history = None
+        if history_file:
+            (history, timestamp) = read_from_log(history_file)
+
+        for child in sorted(os.scandir(directory_path), key=lambda d: d.path):
+            # ignore files in log that no longer exist on the file system
+            if history:
+                history_path = history[12:]
+                while (child.path > history_path and
+                    os.path.dirname(directory_path) in os.path.dirname(history_path)
+                ):
+                    read_from_log(history_file)
+                    (history, timestamp) = read_from_log(history_file)
+                    history_path = history[12:]
+
+            # don't upload craedl-upload logs
+            if 'craedl-upload' not in child.path and 'log' not in child.path:
+
+                if not follow_symlinks and child.is_symlink():
+                    # skip this symlink if ignoring symlinks
+                    write_to_log(log_path, 'IGNORE SYML %s\n', child.path)
+                    continue
+
+                if child.is_file():
+                    # upload file
+                    action1 = 'UPLOAD INIT %s\n' % child.path
+                    action2 = 'UPDATE INIT %s\n' % child.path
+                    action_skip1 = 'UPLOAD SKIP %s\n' % child.path
+                    action_skip2 = 'UPDATE SKIP %s\n' % child.path
+                    new_version = False
+                    if history and child.stat().st_mtime > (
+                        (timestamp - datetime(1970,1,1,tzinfo=timezone.utc)).total_seconds()
+                    ):
+                        new_version = True
+                    if new_version:
+                        write_to_log(log_path, action2)
+                        try:
+                            self.upload_file(child.path)
+                            new_size = os.path.getsize(child.path)
+                            this_size = this_size + new_size
+                            write_to_log(log_path, 'UPDATE DONE %s (%s)\n' % (
+                                to_x_bytes(new_size),
+                                to_x_bytes(size + this_size)
+                            ))
+                        except errors.Parse_Error:
+                            write_to_log(log_path, 'UPLOAD FORB %s\n' % child.path)
+                    elif history and (
+                        history == action1 or history == action_skip1
+                    ):
+                        write_to_log(log_path, action_skip1)
+                        read_from_log(history_file)
+                        (history, timestamp) = read_from_log(history_file)
+                        write_to_log(log_path, 'UPLOAD DONE %s (%s)\n' % (
+                            to_x_bytes(0),
+                            to_x_bytes(size + this_size)
+                        ))
+                    elif history and (
+                        history == action2 or history == action_skip2
+                    ):
+                        write_to_log(log_path, action_skip2)
+                        read_from_log(history_file)
+                        (history, timestamp) = read_from_log(history_file)
+                        write_to_log(log_path, 'UPDATE DONE %s (%s)\n' % (
+                            to_x_bytes(0),
+                            to_x_bytes(size + this_size)
+                        ))
+                    else:
+                        write_to_log(log_path, action1)
+                        try:
+                            self.upload_file(child.path)
+                            new_size = os.path.getsize(child.path)
+                            this_size = this_size + new_size
+                            write_to_log(log_path, 'UPLOAD DONE %s (%s)\n' % (
+                                to_x_bytes(new_size),
+                                to_x_bytes(size + this_size)
+                            ))
+                        except errors.Parse_Error:
+                            write_to_log(log_path, 'UPLOAD FORB %s\n' % child.path)
+
+                else:
+                    # create directory and recurse
+                    action = 'CREATE INIT %s/\n' % child.path
+                    action_skip = 'CREATE SKIP %s/\n' % child.path
+                    if history and (
+                        history == action or history == action_skip
+                    ):
+                        write_to_log(log_path, action_skip)
+                        read_from_log(history_file)
+                    else:
+                        write_to_log(log_path, action)
+                        self = self.create_directory(os.path.basename(child.path))
+                    new_dir = self.get(os.path.basename(child.path))
+                    if type(new_dir) == File:
+                        # handle case where a directory replaced a file of the
+                        # same name
+                        new_dir = get_numbered_upload(
+                            self,
+                            os.path.basename(child.path)
+                        )
+                    write_to_log(log_path, 'CREATE DONE\n')
+
+                    # recurse into this directory
+                    (r_size, history) = new_dir.upload_directory_recurse(
+                        child.path,
+                        log_path,
+                        history_file,
+                        size + this_size,
+                        follow_symlinks
+                    )
+                    this_size = this_size + r_size
+
+        return (this_size, history)
 
 class File(Auth):
     """
