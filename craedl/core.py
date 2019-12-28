@@ -109,6 +109,8 @@ class Auth():
     """
     base_url = 'https://api.craedl.org/'
 
+    token = None
+
     if sys.platform == 'win32':
         token_path = os.path.abspath(os.path.join(os.sep, 'Users',
             os.getlogin(), 'AppData', 'Local', 'Craedl', 'craedl'))
@@ -125,10 +127,11 @@ class Auth():
     def __repr__(self):
         string = '{'
         for k, v in vars(self).items():
-            if type(v) is str:
-                string += "'" + k + "': '" + v + "', "
-            else:
-                string += "'" + k + "': " + str(v) + ", "
+            if k != 'token':
+                if type(v) is str:
+                    string += "'" + k + "': '" + v + "', "
+                else:
+                    string += "'" + k + "': " + str(v) + ", "
         if len(string) > 1:
             string = string[:-2]
         string += '}'
@@ -143,14 +146,15 @@ class Auth():
         :returns: a dict containing the contents of the parsed JSON response or
             an HTML error string if the response does not have status 200
         """
-        token = open(os.path.expanduser(self.token_path)).readline().strip()
+        if not self.token:
+            self.token = open(os.path.expanduser(self.token_path)).readline().strip()
         attempt = 0
         while attempt < RETRY_MAX:
             attempt = attempt + 1
             try:
                 response = requests.get(
                     self.base_url + path,
-                    headers={'Authorization': 'Bearer %s' % token},
+                    headers={'Authorization': 'Bearer %s' % self.token},
                 )
                 return self.process_response(response)
             except requests.exceptions.ConnectionError:
@@ -169,7 +173,8 @@ class Auth():
         :returns: a dict containing the contents of the parsed JSON response or
             an HTML error string if the response does not have status 200
         """
-        token = open(os.path.expanduser(self.token_path)).readline().strip()
+        if not self.token:
+            self.token = open(os.path.expanduser(self.token_path)).readline().strip()
         attempt = 0
         while attempt < RETRY_MAX:
             attempt = attempt + 1
@@ -177,7 +182,7 @@ class Auth():
                 response = requests.post(
                     self.base_url + path,
                     json=data,
-                    headers={'Authorization': 'Bearer %s' % token},
+                    headers={'Authorization': 'Bearer %s' % self.token},
                 )
                 return self.process_response(response)
             except requests.exceptions.ConnectionError:
@@ -196,7 +201,8 @@ class Auth():
         :returns: a dict containing the contents of the parsed JSON response or
             an HTML error string if the response does not have status 200
         """
-        token = open(os.path.expanduser(self.token_path)).readline().strip()
+        if not self.token:
+            self.token = open(os.path.expanduser(self.token_path)).readline().strip()
         with open(file_path, 'rb') as data:
             d = data.read(BUF_SIZE)
             if d:
@@ -209,7 +215,7 @@ class Auth():
                                 self.base_url + path,
                                 data=d,
                                 headers={
-                                    'Authorization': 'Bearer %s' % token,
+                                    'Authorization': 'Bearer %s' % self.token,
                                     'Content-Disposition': 'attachment; filename="craedl-upload"',
                                 },
                             )
@@ -229,7 +235,7 @@ class Auth():
                             self.base_url + path,
                             # no data
                             headers={
-                                'Authorization': 'Bearer %s' % token,
+                                'Authorization': 'Bearer %s' % self.token,
                                 'Content-Disposition': 'attachment; filename="craedl-upload"',
                             },
                         )
@@ -246,14 +252,15 @@ class Auth():
         :type path: string
         :returns: the data stream being downloaded
         """
-        token = open(os.path.expanduser(self.token_path)).readline().strip()
+        if not self.token:
+            self.token = open(os.path.expanduser(self.token_path)).readline().strip()
         attempt = 0
         while attempt < RETRY_MAX:
             attempt = attempt + 1
             try:
                 response = requests.get(
                     self.base_url + path,
-                    headers={'Authorization': 'Bearer %s' % token},
+                    headers={'Authorization': 'Bearer %s' % self.token},
                     stream=True,
                 )
                 return response
