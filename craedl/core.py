@@ -514,49 +514,50 @@ class Directory(Auth):
         if history_file and 'OLDLOG READ' in history:
             (history, timestamp) = read_from_log(history_file)
 
-        if history_path and not synchronize:
-            # copy all work from previous log into current log
-            history_next = history
-            while history_next:
-                history = history_next
-                out = history.replace('INIT', 'SKIP')
-                write_to_log(log_path, out)
-                out = history.replace(
-                    'INIT', 'DONE'
-                ).replace(
-                    'SYML', 'DONE'
-                ).replace(
-                    'SKIP', 'DONE'
-                )[:11] + '\n'
-                write_to_log(log_path, out)
-                (history_next, timestamp) = read_from_log(history_file)
-            # get the right starting directory
-            file_path = os.path.basename(history[12:].rstrip())
-            base_path = directory_path
-            directory_path = os.path.dirname(history[12:].rstrip())
-            if file_path == directory_path:
-                file_path = None
-            else:
-                file_path = directory_path + '/' + file_path
-            new_dir = self.get(os.path.basename(base_path))
+#        if history_path and not synchronize:
+#            # copy all work from previous log into current log
+#            history_next = history
+#            while history_next:
+#                history = history_next
+#                out = history.replace('INIT', 'SKIP')
+#                write_to_log(log_path, out)
+#                out = history.replace(
+#                    'INIT', 'DONE'
+#                ).replace(
+#                    'SYML', 'DONE'
+#                ).replace(
+#                    'SKIP', 'DONE'
+#                )[:11] + '\n'
+#                write_to_log(log_path, out)
+#                (history_next, timestamp) = read_from_log(history_file)
+#            # get the right starting directory
+#            file_path = os.path.basename(history[12:].rstrip())
+#            base_path = directory_path
+#            directory_path = os.path.dirname(history[12:].rstrip())
+#            if file_path == directory_path:
+#                file_path = None
+#            else:
+#                file_path = directory_path + '/' + file_path
+#            craedl_path = directory_path.replace(os.path.dirname(base_path) + '/', '')
+#            new_dir = self.get(craedl_path)
+#        else:
+        action = 'CREATE INIT %s/\n' % directory_path
+        action_skip = 'CREATE SKIP %s/\n' % directory_path
+        if history and (
+            history == action or history == action_skip
+        ):
+            write_to_log(log_path, action_skip)
         else:
-            action = 'CREATE INIT %s/\n' % directory_path
-            action_skip = 'CREATE SKIP %s/\n' % directory_path
-            if history and (
-                history == action or history == action_skip
-            ):
-                write_to_log(log_path, action_skip)
-            else:
-                write_to_log(log_path, action)
-                self = self.create_directory(os.path.basename(directory_path))
-            new_dir = self.get(os.path.basename(directory_path))
-            if type(new_dir) == File:
-                # handle case where a directory replaced a file of the same name
-                new_dir = get_numbered_upload(
-                    self,
-                    os.path.basename(directory_path)
-                )
-            write_to_log(log_path, 'CREATE DONE\n')
+            write_to_log(log_path, action)
+            self = self.create_directory(os.path.basename(directory_path))
+        new_dir = self.get(os.path.basename(directory_path))
+        if type(new_dir) == File:
+            # handle case where a directory replaced a file of the same name
+            new_dir = get_numbered_upload(
+                self,
+                os.path.basename(directory_path)
+            )
+        write_to_log(log_path, 'CREATE DONE\n')
 
         new_dir.upload_directory_recurse(
             directory_path,
