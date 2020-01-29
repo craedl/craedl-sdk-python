@@ -62,6 +62,13 @@ def read_from_log(logfile):
         return (None, None)
     timestamp = datetime.fromisoformat(log[:32])
     message = log[33:]
+    log2 = logfile.readline()
+    if log == '':
+        return (None, None)
+    timestamp2 = datetime.fromisoformat(log[:32])
+    message2 = log2[33:]
+    if 'DONE' not in message2:
+        return (None, timestamp)
     return (message, timestamp)
 
 def to_x_bytes(bytes):
@@ -436,7 +443,10 @@ class Directory(Auth):
         }
         response_data = self.POST('file/', data)
         response_data2 = self.PUT_DATA(
-            'data/%d/?vid=%d' % (response_data['id'], response_data['active_version']),
+            'data/%d/?vid=%d' % (
+                response_data['id'],
+                response_data['active_version']
+            ),
             file_path
         )
         return Directory(self.id)
@@ -444,7 +454,8 @@ class Directory(Auth):
     def upload_directory(
         self,
         directory_path,
-        follow_symlinks=False
+        follow_symlinks=False,
+        synchronize=True,
     ):
         """
         Upload a new directory contained within this directory. It generates a
@@ -464,9 +475,21 @@ class Directory(Auth):
         :type directory_path: string
         :param follow_symlinks: whether to follow symlinks (default False)
         :type follow_symlinks: bool
+        :param synchronize: Whether to perform a synchronization or skip
+            previous work (default True). If synchronization is on, the work
+            completed in the most recent log file will be taken into account. If
+            synchronization is off, this upload will begin at the last
+            successful operation in the most recent log file (if one exists)
+            without synchronizing the directories and files that were previously
+            uploaded and logged.
+        :type synchronize: bool
         :returns: the updated instance of this directory
         """
         directory_path = os.path.expanduser(directory_path)
+        if not os.path.isdir(directory_path):
+            print('Failure: %s is not a directory.' % directory_path)
+            exit()
+
         log_path = '%s/craedl-upload-%s.log' % (
             directory_path,
             datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
@@ -478,19 +501,44 @@ class Directory(Auth):
         for item in sorted(ls):
             if 'craedl-upload' in item and 'log' in item:
                 history_path = item
+
         if history_path:
             history_file = open(history_path, 'r')
             write_to_log(log_path, 'OLDLOG READ %s\n' % history_path)
+            write_to_log(log_path, 'OLDLOG DONE\n')
 
         history = None
+        file_path = None # for synchronization false
         if history_file:
             (history, timestamp) = read_from_log(history_file)
         if history_file and 'OLDLOG READ' in history:
             (history, timestamp) = read_from_log(history_file)
 
-        if not os.path.isdir(directory_path):
-            print('Failure: %s is not a directory.' % directory_path)
-            exit()
+        if history_path and not synchronize:
+            # copy all work from previous log into current log
+            history_next = history
+            while history_next:
+                history = history_next
+                out = history.replace('INIT', 'SKIP')
+                write_to_log(log_path, out)
+                out = history.replace(
+                    'INIT', 'DONE'
+                ).replace(
+                    'SYML', 'DONE'
+                ).replace(
+                    'SKIP', 'DONE'
+                )[:11] + '\n'
+                write_to_log(log_path, out)
+                (history_next, timestamp) = read_from_log(history_file)
+            # get the right starting directory
+            file_path = os.path.basename(history[12:].rstrip())
+            base_path = directory_path
+            directory_path = os.path.dirname(history[12:].rstrip())
+            if file_path == directory_path:
+                file_path = None
+            else:
+                file_path = directory_path + '/' + file_path
+            new_dir = self.get(os.path.basename(base_path))
         else:
             action = 'CREATE INIT %s/\n' % directory_path
             action_skip = 'CREATE SKIP %s/\n' % directory_path
@@ -498,7 +546,6 @@ class Directory(Auth):
                 history == action or history == action_skip
             ):
                 write_to_log(log_path, action_skip)
-                read_from_log(history_file)
             else:
                 write_to_log(log_path, action)
                 self = self.create_directory(os.path.basename(directory_path))
@@ -511,14 +558,15 @@ class Directory(Auth):
                 )
             write_to_log(log_path, 'CREATE DONE\n')
 
-            new_dir.upload_directory_recurse(
-                directory_path,
-                log_path,
-                history_file,
-                0,
-                follow_symlinks
-            )
-            return Directory(self.id)
+        new_dir.upload_directory_recurse(
+            directory_path,
+            log_path,
+            history_file,
+            0,
+            follow_symlinks,
+            file_path
+        )
+        return Directory(self.id)
 
     def upload_directory_recurse(
         self,
@@ -526,7 +574,8 @@ class Directory(Auth):
         log_path,
         history_file,
         size,
-        follow_symlinks
+        follow_symlinks,
+        synchronize_start=None
     ):
         """
         A helper function for directory uploads that performs the recursion
@@ -544,7 +593,10 @@ class Directory(Auth):
         :type size: int
         :param follow_symlinks: whether to follow symlinks
         :type follow_symlinks: bool
+        :param synchronize: the path to the file on which to begin
+        :type synchronize: string
         """
+        synchronize_start_file = synchronize_start
         this_size = 0
         history = None
         if history_file:
@@ -557,19 +609,29 @@ class Directory(Auth):
                 while (child.path > history_path and
                     os.path.dirname(directory_path) in os.path.dirname(history_path)
                 ):
-                    read_from_log(history_file)
                     (history, timestamp) = read_from_log(history_file)
-                    history_path = history[12:]
+                    if history:
+                        history_path = history[12:]
+                    else:
+                        break
 
             # don't upload craedl-upload logs
             if 'craedl-upload' not in child.path and 'log' not in child.path:
 
-                if not follow_symlinks and child.is_symlink():
+                if (synchronize_start_file
+                    and child.path <= synchronize_start_file
+                ):
+                    if child.path == synchronize_start_file:
+                        # no synchronize to worry about anymore
+                        synchronize_start_file = None
+
+                elif not follow_symlinks and child.is_symlink():
                     # skip this symlink if ignoring symlinks
-                    write_to_log(log_path, 'IGNORE SYML %s\n', child.path)
+                    write_to_log(log_path, 'IGNORE SYML %s\n' % child.path)
+                    write_to_log(log_path, 'IGNORE DONE\n')
                     continue
 
-                if child.is_file():
+                elif child.is_file():
                     # upload file
                     action1 = 'UPLOAD INIT %s\n' % child.path
                     action2 = 'UPDATE INIT %s\n' % child.path
@@ -577,7 +639,8 @@ class Directory(Auth):
                     action_skip2 = 'UPDATE SKIP %s\n' % child.path
                     new_version = False
                     if history and child.stat().st_mtime > (
-                        (timestamp - datetime(1970,1,1,tzinfo=timezone.utc)).total_seconds()
+                        (timestamp - datetime(1970,1,1,tzinfo=timezone.utc)
+                        ).total_seconds()
                     ):
                         new_version = True
                     if new_version:
@@ -596,7 +659,6 @@ class Directory(Auth):
                         history == action1 or history == action_skip1
                     ):
                         write_to_log(log_path, action_skip1)
-                        read_from_log(history_file)
                         (history, timestamp) = read_from_log(history_file)
                         write_to_log(log_path, 'UPLOAD DONE %s (%s)\n' % (
                             to_x_bytes(0),
@@ -606,7 +668,6 @@ class Directory(Auth):
                         history == action2 or history == action_skip2
                     ):
                         write_to_log(log_path, action_skip2)
-                        read_from_log(history_file)
                         (history, timestamp) = read_from_log(history_file)
                         write_to_log(log_path, 'UPDATE DONE %s (%s)\n' % (
                             to_x_bytes(0),
@@ -633,7 +694,6 @@ class Directory(Auth):
                         history == action or history == action_skip
                     ):
                         write_to_log(log_path, action_skip)
-                        read_from_log(history_file)
                     else:
                         write_to_log(log_path, action)
                         self = self.create_directory(os.path.basename(child.path))
@@ -697,6 +757,9 @@ class File(Auth):
         except IsADirectoryError:
             f = open(save_path + '/' + self.name, 'wb')
         for chunk in data.iter_content():
+            # because we are using iter_content and GET_DATA uses stream=True
+            # in the request, the data is not read into memory but written
+            # directly from the stream here
             f.write(chunk)
         f.close()
         return self
