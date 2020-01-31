@@ -486,6 +486,13 @@ class Directory(Auth):
             print('Failure: %s is not a file.' % file_path)
             exit()
 
+        if (os.path.basename(file_path)[0] == '.'
+            or os.path.basename(file_path)[0] == '~'
+        ):
+            if output:
+                print('UPLOAD FIL %s...skip' % (file_path), flush=True)
+            return self
+
         if output:
             print('UPLOAD FIL %s...' % (file_path), end='', flush=True)
         stream_data = False
@@ -559,18 +566,28 @@ class Directory(Auth):
             exit()
 
         # create new directory
-        print('CREATE DIR %s/...' % (directory_path), end='', flush=True)
+        if output:
+            print('CREATE DIR %s/...' % (directory_path), end='', flush=True)
+        if (os.path.basename(directory_path)[0] == '.'
+            or os.path.basename(directory_path)[1] == '~'
+        ):
+            if output:
+                print('skip', flush=True)
         try:
             new_dir = self.get(os.path.basename(directory_path))
+            if output:
+                print('exists', flush=True)
         except FileNotFoundError:
             self = self.create_directory(os.path.basename(directory_path))
             new_dir = self.get(os.path.basename(directory_path))
-        print('done', flush=True)
+            if output:
+                print('created', flush=True)
 
         for child in sorted(os.scandir(directory_path), key=lambda d: d.path):
             if not follow_symlinks and child.is_symlink():
                 # skip this symlink if ignoring symlinks
-                print('SKIP SMLNK %s/...done' % (child.path), flush=True)
+                if output:
+                    print('SKIP SMLNK %s/...done' % (child.path), flush=True)
             elif child.is_file():
                 # upload file
                 new_dir = new_dir.upload_file(child.path, output)
