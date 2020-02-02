@@ -169,34 +169,6 @@ class Auth():
                 time.sleep(RETRY_SLEEP)
         raise errors.Retry_Max_Error
 
-    def POST(self, path, data):
-        """
-        Handle a POST request.
-
-        :param path: the RESTful API method path
-        :type path: string
-        :param data: the data to POST to the RESTful API method as described at
-            https://api.craedl.org
-        :type data: dict
-        :returns: a dict containing the contents of the parsed JSON response or
-            an HTML error string if the response does not have status 200
-        """
-        if not self.token:
-            self.token = open(os.path.expanduser(self.token_path)).readline().strip()
-        attempt = 0
-        while attempt < RETRY_MAX:
-            attempt = attempt + 1
-            try:
-                response = requests.post(
-                    self.base_url + path,
-                    json=data,
-                    headers={'Authorization': 'Bearer %s' % self.token},
-                )
-                return self.process_response(response)
-            except requests.exceptions.ConnectionError:
-                time.sleep(RETRY_SLEEP)
-        raise errors.Retry_Max_Error
-
     def PUT_DATA(self, path, file_path):
         """
         Handle a data PUT request.
@@ -346,7 +318,7 @@ class Directory(Auth):
         response_data = self.POST('directory/', data)
         return Directory(self.id)
 
-    def download(self, save_path, output=False):
+    def download(self, save_path, output=False, accumulated_size=0):
         """
         Download the data associated with this directory. This returns the
         active version of all files. It generates a log file in the `save_path`
@@ -356,8 +328,12 @@ class Directory(Auth):
             contain this file's data
         :type save_path: string
         :param output: whether to print to STDOUT (defaults to false)
+        :param accumulated_size: the size that has accumulated prior to this
+            upload (defaults to 0); this is entirely for output purposes
+        :type accumulated_size: int
         :type output: bool
         """
+        this_size = 0
         save_path = os.path.expanduser(save_path)
         if not os.path.isdir(save_path):
             print('Failure: %s is not a directory.' % save_path)
@@ -380,14 +356,23 @@ class Directory(Auth):
         (dirs, files) = self.list()
         for f in files:
             # download child files
-            f.download(save_path + '/' + self.name, output=output)
+            (f, new_size) = f.download(
+                save_path + '/' + self.name,
+                output=output,
+                accumulated_size=accumulated_size + this_size
+            )
+            this_size = this_size + new_size
 
         for d in dirs:
             # recurse into child directories
-            r_size = d.download(
+            (d, new_size) = d.download(
                 save_path + '/' + self.name,
-                output=output
+                output=output,
+                accumulated_size = this_size
             )
+            this_size = this_size + new_size
+
+        return (self, this_size)
 
     def get(self, path):
         """
@@ -462,7 +447,7 @@ class Directory(Auth):
                 files.append(File(c['id']))
         return (dirs, files)
 
-    def upload_file(self, file_path, output=False):
+    def upload_file(self, file_path, output=False, accumulated_size=0):
         """
         Upload a new file contained within this directory.
 
@@ -479,7 +464,11 @@ class Directory(Auth):
         :type file_path: string
         :param output: whether to print to STDOUT (defaults to false)
         :type output: bool
-        :returns: the updated instance of this directory
+        :param accumulated_size: the size that has accumulated prior to this
+            upload (defaults to 0); this is entirely for output purposes
+        :type accumulated_size: int
+        :returns: a tuple with the updated instance of this directory and the
+            uploaded size
         """
         file_path = os.path.expanduser(file_path)
         if not os.path.isfile(file_path):
@@ -523,19 +512,24 @@ class Directory(Auth):
                 file_path
             )
             D = Directory(self.id)
-            print('uploaded (%s)' % to_x_bytes(os.path.getsize(file_path)),
-                flush=True
-            )
-            return D
+            size = os.path.getsize(file_path)
+            if output:
+                print('uploaded %s (%s)' % (
+                    to_x_bytes(size),
+                    to_x_bytes(size + accumulated_size),
+                ), flush=True)
+            return (D, size)
         else:
-            print('current', flush=True)
-            return self
+            if output:
+                print('current (%s)' % to_x_bytes(accumulated_size), flush=True)
+            return (self, 0)
 
     def upload_directory(
         self,
         directory_path,
         follow_symlinks=False,
-        output=False
+        output=False,
+        accumulated_size=0
     ):
         """
         Upload a new directory contained within this directory. It generates a
@@ -558,8 +552,12 @@ class Directory(Auth):
         :type follow_symlinks: bool
         :param output: whether to print to STDOUT (defaults to false)
         :type output: bool
+        :param accumulated_size: the size that has accumulated prior to this
+            upload (defaults to 0); this is entirely for output purposes
+        :type accumulated_size: int
         :returns: the updated instance of this directory
         """
+        this_size = 0
         directory_path = os.path.expanduser(directory_path)
         if not os.path.isdir(directory_path):
             print('Failure: %s is not a directory.' % directory_path)
@@ -590,14 +588,24 @@ class Directory(Auth):
                     print('SKIP SMLNK %s/...done' % (child.path), flush=True)
             elif child.is_file():
                 # upload file
-                new_dir = new_dir.upload_file(child.path, output)
+                (new_dir, new_size) = new_dir.upload_file(
+                    child.path,
+                    output,
+                    accumulated_size + this_size
+                )
+                this_size = this_size + new_size
             else:
                 # recurse into this directory
-                new_dir.upload_directory(
+                (new_dir, new_size) = new_dir.upload_directory(
                     child.path,
-                    follow_symlinks,
-                    output=output
+                    follow_symlinks=follow_symlinks,
+                    output=output,
+                    accumulated_size=this_size
                 )
+                this_size = this_size + new_size
+        accumulated_size = accumulated_size + this_size
+
+        return (self, this_size)
 
 class File(Auth):
     """
@@ -612,21 +620,30 @@ class File(Auth):
                 v.reverse() # list versions in chronological order
             setattr(self, k, v)
 
-    def download(self, save_path, version_index=-1, output=False):
+    def download(self,
+        save_path,
+        version_index=-1,
+        output=False,
+        accumulated_size=0
+    ):
         """
-        Download the data associated with this file. This returns the active
-        version by default.
+        Download the data associated with this file. This returns the most
+        recent version by default.
 
         :param save_path: the path to the directory on your computer that will
             contain this file's data
         :type save_path: string
         :param version_index: the (optional) index of the version to be
-            downloaded
+            downloaded; defaults to the most recent version
         :type version_index: int
         :param output: whether to print to STDOUT (defaults to false)
         :type output: bool
-        :returns: this file
+        :param accumulated_size: the size that has accumulated prior to this
+            upload (defaults to 0); this is entirely for output purposes
+        :type accumulated_size: int
+        :returns: a tuple containing this file and the size downloaded
         """
+        this_size = 0
         save_path = os.path.expanduser(save_path)
         if output:
             print('GET FILE %s...' % (save_path + '/' + self.name),
@@ -658,11 +675,15 @@ class File(Auth):
                 f.write(chunk)
             f.close()
             if output:
-                print('downloaded (%s)' % to_x_bytes(self.size), flush=True)
+                print('downloaded %s (%s)' % (
+                    to_x_bytes(self.size),
+                    to_x_bytes(self.size + accumulated_size)
+                ), flush=True)
+            return (self, self.size)
         else:
             if output:
-                print('current', flush=True)
-        return self
+                print('current (%s)' % to_x_bytes(accumulated_size), flush=True)
+            return (self, 0)
 
 class Profile(Auth):
     """
