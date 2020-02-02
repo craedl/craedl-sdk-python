@@ -21,7 +21,7 @@ from craedl import __version__
 # -- Project information -----------------------------------------------------
 
 project = 'craedl-sdk-python'
-copyright = '2019, The Johns Hopkins University'
+copyright = '2020, The Johns Hopkins University'
 author = 'Craedl.org'
 
 master_doc = 'index'
