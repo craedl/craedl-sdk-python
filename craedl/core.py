@@ -480,7 +480,7 @@ class Directory(Auth):
         ):
             if output:
                 print('UPLOAD FIL %s...skip' % (file_path), flush=True)
-            return self
+            return (self, 0)
 
         if output:
             print('UPLOAD FIL %s...' % (file_path), end='', flush=True)
