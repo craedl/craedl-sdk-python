@@ -16,12 +16,14 @@ from datetime import datetime
 from datetime import timezone
 from dateutil.tz import tzlocal
 import glob
+import hashlib
 import json
 import os
 import requests
 import sys
 import time
 
+from craedl import cache as sync_cache
 from craedl import errors
 
 BUF_SIZE = 104857600
@@ -50,27 +52,22 @@ def get_numbered_upload(parent, childname):
                 match_num = num
     return self.get('%s (%d)' % (childname, match_num))
 
-def read_from_log(logfile):
+def hash_directory_files(path):
     """
-    Read the message in the next line of the log.
+    Generate a hash string representing the state of the files in a directory.
+    The hash changes if any file is added, removed, or modified on disk.
 
-    :param logfile: the logfile
-    :type logfile: File
-    :returns: a tuple containg the message and the timestamp
+    :param path: the directory path
+    :type path: string
+    :returns: a SHA1 hash representation of the files in the directory
     """
-    log = logfile.readline()
-    if log == '':
-        return (None, None)
-    timestamp = datetime.fromisoformat(log[:32])
-    message = log[33:]
-    log2 = logfile.readline()
-    if log == '':
-        return (None, None)
-    timestamp2 = datetime.fromisoformat(log[:32])
-    message2 = log2[33:]
-    if 'DONE' not in message2:
-        return (None, timestamp)
-    return (message, timestamp)
+    children_hash = hashlib.sha1()
+    children = os.scandir(path)
+    for child in children:
+        basename = os.path.basename(child.path)
+        if (child.is_file() and (basename[0] != '.' and basename[0] != '~')):
+            children_hash.update(child.stat().st_mtime.hex().encode('utf-8'))
+    return children_hash.hexdigest()
 
 def to_x_bytes(bytes):
     """
@@ -96,26 +93,13 @@ def to_x_bytes(bytes):
     if power == 12:
         return '%.0f TB' % x_bytes
 
-def write_to_log(log_path, message):
-    """
-    Write a message to the log. Automatically prepends the timestamp.
-
-    :param log_path: absolute path to the logfile
-    :type log_path: string
-    :param message: the message to write to the logfile
-    :type message: string
-    """
-    print(datetime.now(timezone.utc).isoformat() + ' ' + message, end='', flush=True)
-    f = open(log_path, 'a+')
-    f.write(datetime.now(timezone.utc).isoformat() + ' ' + message)
-    f.close()
-
 class Auth():
     """
     This base class handles low-level RESTful API communications. Any class that
     needs to perform RESTful API communications should extend this class.
     """
     base_url = 'https://api.craedl.org/'
+    base_url = 'https://api.localhost.test:8000/'#XXX
 
     token = None
 
@@ -163,6 +147,35 @@ class Auth():
                 response = requests.get(
                     self.base_url + path,
                     headers={'Authorization': 'Bearer %s' % self.token},
+                    verify=False,#XXX
+                )
+                return self.process_response(response)
+            except requests.exceptions.ConnectionError:
+                time.sleep(RETRY_SLEEP)
+        raise errors.Retry_Max_Error
+
+    def POST(self, path, data):
+        """
+        Handle a POST request.
+        :param path: the RESTful API method path
+        :type path: string
+        :param data: the data to POST to the RESTful API method as described at
+            https://api.craedl.org
+        :type data: dict
+        :returns: a dict containing the contents of the parsed JSON response or
+            an HTML error string if the response does not have status 200
+        """
+        if not self.token:
+            self.token = open(os.path.expanduser(self.token_path)).readline().strip()
+        attempt = 0
+        while attempt < RETRY_MAX:
+            attempt = attempt + 1
+            try:
+                response = requests.post(
+                    self.base_url + path,
+                    json=data,
+                    headers={'Authorization': 'Bearer %s' % self.token},
+                    verify=False,#XXX
                 )
                 return self.process_response(response)
             except requests.exceptions.ConnectionError:
@@ -198,6 +211,7 @@ class Auth():
                                     'Authorization': 'Bearer %s' % self.token,
                                     'Content-Disposition': 'attachment; filename="craedl-upload"',
                                 },
+                                verify=False,#XXX
                             )
                             break
                         except requests.exceptions.ConnectionError:
@@ -218,6 +232,7 @@ class Auth():
                                 'Authorization': 'Bearer %s' % self.token,
                                 'Content-Disposition': 'attachment; filename="craedl-upload"',
                             },
+                            verify=False,#XXX
                         )
                         return self.process_response(response)
                     except requests.exceptions.ConnectionError:
@@ -241,6 +256,7 @@ class Auth():
                 response = requests.get(
                     self.base_url + path,
                     headers={'Authorization': 'Bearer %s' % self.token},
+                    verify=False,#XXX
                     stream=True,
                 )
                 return response
@@ -528,8 +544,7 @@ class Directory(Auth):
         self,
         directory_path,
         follow_symlinks=False,
-        output=False,
-        accumulated_size=0
+        output=False
     ):
         """
         Upload a new directory contained within this directory. It generates a
@@ -552,16 +567,70 @@ class Directory(Auth):
         :type follow_symlinks: bool
         :param output: whether to print to STDOUT (defaults to false)
         :type output: bool
-        :param accumulated_size: the size that has accumulated prior to this
-            upload (defaults to 0); this is entirely for output purposes
-        :type accumulated_size: int
         :returns: the updated instance of this directory
         """
-        this_size = 0
+        accumulated_size = 0
         directory_path = os.path.expanduser(directory_path)
         if not os.path.isdir(directory_path):
             print('Failure: %s is not a directory.' % directory_path)
             exit()
+
+        cache_path = directory_path + '/.craedl-upload-cache-%d.db' % (
+            self.id
+        )
+        cache = sync_cache.Cache()
+        cache.open(cache_path)
+
+        # begin the recursive upload
+        (self, this_size) = self.upload_directory_recurse(
+            cache,
+            directory_path,
+            follow_symlinks,
+            output,
+            0
+        )
+
+        if cache:
+            cache.close()
+
+        return self
+
+    def upload_directory_recurse(
+        self,
+        cache,
+        directory_path,
+        follow_symlinks,
+        output,
+        accumulated_size
+    ):
+        """
+        A recursive helper function for uploading a directory.
+
+        :param directory_path: the path to the directory to be uploaded on your
+            computer
+        :type directory_path: string
+        :param follow_symlinks: whether to follow symlinks
+        :type follow_symlinks: bool
+        :param output: whether to print to STDOUT
+        :type output: bool
+        :param accumulated_size: the size that has accumulated prior to this
+            recursion level
+        :type accumulated_size: int
+        :returns: a tuple containing the updated instance of this directory
+            and the size accumulated for this directory and its children
+        """
+        this_size = 0
+
+        children = sorted(os.scandir(directory_path), key=lambda d: d.path)
+
+        directory_hash = hash_directory_files(directory_path)
+        do_upload = True
+        if cache.check_upload(directory_path, directory_hash):
+            # no need to upload
+            do_upload = False
+        else:
+            # record the directory hash
+            cache.start_upload(directory_path, directory_hash)
 
         # create new directory
         if output:
@@ -581,29 +650,41 @@ class Directory(Auth):
             if output:
                 print('created', flush=True)
 
-        for child in sorted(os.scandir(directory_path), key=lambda d: d.path):
+        for child in children:
             if not follow_symlinks and child.is_symlink():
                 # skip this symlink if ignoring symlinks
                 if output:
                     print('SKIP SMLNK %s/...done' % (child.path), flush=True)
             elif child.is_file():
-                # upload file
-                (new_dir, new_size) = new_dir.upload_file(
-                    child.path,
-                    output,
-                    accumulated_size + this_size
-                )
-                this_size = this_size + new_size
+                if do_upload:
+                    # upload file
+                    (new_dir, new_size) = new_dir.upload_file(
+                        child.path,
+                        output,
+                        accumulated_size + this_size
+                    )
+                    this_size = this_size + new_size
+                else:
+                    # safe to skip this file
+                    if output:
+                        print('SYNCHD FIL %s/...skip (%s)' % (
+                            child.path,
+                            to_x_bytes(accumulated_size + this_size)
+                        ))
             else:
                 # recurse into this directory
-                (new_dir, new_size) = new_dir.upload_directory(
+                (new_dir, new_size) = new_dir.upload_directory_recurse(
+                    cache,
                     child.path,
                     follow_symlinks=follow_symlinks,
                     output=output,
-                    accumulated_size=this_size
+                    accumulated_size=accumulated_size + this_size
                 )
                 this_size = this_size + new_size
         accumulated_size = accumulated_size + this_size
+
+        # mark upload as completed in cache
+        cache.finish_upload(directory_path, directory_hash)
 
         return (self, this_size)
 
