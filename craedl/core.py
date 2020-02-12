@@ -99,7 +99,6 @@ class Auth():
     needs to perform RESTful API communications should extend this class.
     """
     base_url = 'https://api.craedl.org/'
-    base_url = 'https://api.localhost.test:8000/'#XXX
 
     token = None
 
@@ -147,7 +146,6 @@ class Auth():
                 response = requests.get(
                     self.base_url + path,
                     headers={'Authorization': 'Bearer %s' % self.token},
-                    verify=False,#XXX
                 )
                 return self.process_response(response)
             except requests.exceptions.ConnectionError:
@@ -176,7 +174,6 @@ class Auth():
                     self.base_url + path,
                     json=data,
                     headers={'Authorization': 'Bearer %s' % self.token},
-                    verify=False,#XXX
                 )
                 return self.process_response(response)
             except requests.exceptions.ConnectionError:
@@ -212,7 +209,6 @@ class Auth():
                                     'Authorization': 'Bearer %s' % self.token,
                                     'Content-Disposition': 'attachment; filename="craedl-upload"',
                                 },
-                                verify=False,#XXX
                             )
                             break
                         except requests.exceptions.ConnectionError:
@@ -233,7 +229,6 @@ class Auth():
                                 'Authorization': 'Bearer %s' % self.token,
                                 'Content-Disposition': 'attachment; filename="craedl-upload"',
                             },
-                            verify=False,#XXX
                         )
                         return self.process_response(response)
                     except requests.exceptions.ConnectionError:
@@ -257,7 +252,6 @@ class Auth():
                 response = requests.get(
                     self.base_url + path,
                     headers={'Authorization': 'Bearer %s' % self.token},
-                    verify=False,#XXX
                     stream=True,
                 )
                 return response
