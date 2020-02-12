@@ -743,7 +743,7 @@ class Directory(Auth):
         if output:
             print('CREATE DIR %s/...' % (directory_path), end='', flush=True)
         if (os.path.basename(directory_path)[0] == '.'
-            or os.path.basename(directory_path)[1] == '~'
+            or os.path.basename(directory_path)[0] == '~'
         ):
             if output:
                 print('skip', flush=True)
