@@ -329,7 +329,7 @@ class Directory(Auth):
         response_data = self.POST('directory/', data)
         return Directory(self.id)
 
-    def download(self, save_path, output=False):
+    def download(self, save_path, rescan=True, output=False):
         """
         Download the data associated with this directory. This returns the
         active version of all files. It generates a cache database file in the
@@ -339,7 +339,10 @@ class Directory(Auth):
         :param save_path: the path to the directory on your computer that will
             contain this file's data
         :type save_path: string
-        :param output: whether to print to STDOUT (defaults to false)
+        :param rescan: whether to rescan the directories (defaults to True);
+            ignores new children in already transferred directories if False
+        :type rescan: boolean
+        :param output: whether to print to STDOUT (defaults to False)
         :type output: boolean
         :returns: the updated instance of this directory
         """
@@ -374,6 +377,7 @@ class Directory(Auth):
         (self, this_size) = self.download_recurse(
             cache,
             save_path,
+            rescan,
             output,
             0
         )
@@ -387,6 +391,7 @@ class Directory(Auth):
         self,
         cache,
         save_path,
+        rescan,
         output,
         accumulated_size
     ):
@@ -400,7 +405,10 @@ class Directory(Auth):
         :param save_path: the path to the directory on your computer that will
             contain this file's data
         :type save_path: string
-        :param output: whether to print to STDOUT (defaults to false)
+        :param rescan: whether to rescan the directories (defaults to True);
+            ignores new children in already transferred directories if False
+        :type rescan: boolean
+        :param output: whether to print to STDOUT (defaults to False)
         :type output: boolean
         :param accumulated_size: the amount of data that has been downloaded so
             far
@@ -415,6 +423,10 @@ class Directory(Auth):
         if cache.check(save_path, self.directory_hash):
             # no need to download
             do_download = False
+            if not rescan:
+                # skip this recursion branch if user requests not to look for
+                # changes to already downloaded children
+                return (self, this_size)
         else:
             # record the directory hash
             cache.start(save_path, self.directory_hash)
@@ -555,8 +567,8 @@ class Directory(Auth):
 
         :param file_path: the path to the file to be uploaded on your computer
         :type file_path: string
-        :param output: whether to print to STDOUT (defaults to false)
-        :type output: bool
+        :param output: whether to print to STDOUT (defaults to False)
+        :type output: boolean
         :param accumulated_size: the size that has accumulated prior to this
             upload (defaults to 0); this is entirely for output purposes
         :type accumulated_size: int
@@ -620,6 +632,7 @@ class Directory(Auth):
     def upload_directory(
         self,
         directory_path,
+        rescan=True,
         follow_symlinks=False,
         output=False
     ):
@@ -641,9 +654,12 @@ class Directory(Auth):
             computer
         :type directory_path: string
         :param follow_symlinks: whether to follow symlinks (default False)
-        :type follow_symlinks: bool
-        :param output: whether to print to STDOUT (defaults to false)
-        :type output: bool
+        :type follow_symlinks: boolean
+        :param rescan: whether to rescan the directories (defaults to True);
+            ignores new children in already transferred directories if False
+        :type rescan: boolean
+        :param output: whether to print to STDOUT (defaults to False)
+        :type output: boolean
         :returns: the updated instance of this directory
         """
         accumulated_size = 0
@@ -662,6 +678,7 @@ class Directory(Auth):
         (self, this_size) = self.upload_directory_recurse(
             cache,
             directory_path,
+            rescan,
             follow_symlinks,
             output,
             0
@@ -676,6 +693,7 @@ class Directory(Auth):
         self,
         cache,
         directory_path,
+        rescan,
         follow_symlinks,
         output,
         accumulated_size
@@ -690,8 +708,11 @@ class Directory(Auth):
         :param directory_path: the path to the directory on your computer that
             will contain this file's data
         :type directory_path: string
+        :param rescan: whether to rescan the directories (defaults to True);
+            ignores new children in already transferred directories if False
+        :type rescan: boolean
         :param follow_symlinks: whether to follow symlinks
-        :type follow_symlinks: bool
+        :type follow_symlinks: boolean
         :param output: whether to print to STDOUT
         :type output: boolean
         :param accumulated_size: the amount of data that has been uploaded so
@@ -710,6 +731,10 @@ class Directory(Auth):
         if cache.check(directory_path, directory_hash):
             # no need to upload
             do_upload = False
+            if not rescan:
+                # skip this recursion branch if user requests not to look for
+                # changes to already uploaded children
+                return (self, this_size)
         else:
             # record the directory hash
             cache.start(directory_path, directory_hash)
@@ -760,6 +785,7 @@ class Directory(Auth):
                 (new_dir, new_size) = new_dir.upload_directory_recurse(
                     cache,
                     child.path,
+                    rescan=rescan,
                     follow_symlinks=follow_symlinks,
                     output=output,
                     accumulated_size=accumulated_size + this_size
@@ -800,8 +826,8 @@ class File(Auth):
         :param version_index: the (optional) index of the version to be
             downloaded; defaults to the most recent version
         :type version_index: int
-        :param output: whether to print to STDOUT (defaults to false)
-        :type output: bool
+        :param output: whether to print to STDOUT (defaults to False)
+        :type output: boolean
         :param accumulated_size: the size that has accumulated prior to this
             upload (defaults to 0); this is entirely for output purposes
         :type accumulated_size: int
