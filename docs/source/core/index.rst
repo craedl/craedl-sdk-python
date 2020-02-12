@@ -1,6 +1,9 @@
 Craedl Python SDK documentation
 ===============================
 
+Core
+----
+
 Auth
 ****
 .. autoclass:: craedl.core.Auth
@@ -35,3 +38,10 @@ Research Group
 **************
 .. autoclass:: craedl.core.Research_Group
     :members:
+
+Cache
+-----
+
+Cache
+*****
+.. autoclass:: craedl.cache.Cache

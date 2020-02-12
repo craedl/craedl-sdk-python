@@ -52,7 +52,7 @@ def get_numbered_upload(parent, childname):
                 match_num = num
     return self.get('%s (%d)' % (childname, match_num))
 
-def hash_directory_files(path):
+def hash_directory(path):
     """
     Generate a hash string representing the state of the files in a directory.
     The hash changes if any file is added, removed, or modified on disk.
@@ -65,7 +65,7 @@ def hash_directory_files(path):
     children = os.scandir(path)
     for child in children:
         basename = os.path.basename(child.path)
-        if (child.is_file() and (basename[0] != '.' and basename[0] != '~')):
+        if (basename[0] != '.' and basename[0] != '~'):
             children_hash.update(child.stat().st_mtime.hex().encode('utf-8'))
     return children_hash.hexdigest()
 
@@ -157,6 +157,7 @@ class Auth():
     def POST(self, path, data):
         """
         Handle a POST request.
+
         :param path: the RESTful API method path
         :type path: string
         :param data: the data to POST to the RESTful API method as described at
@@ -297,7 +298,7 @@ class Directory(Auth):
 
     def __init__(self, id):
         super().__init__()
-        data = self.GET('directory/' + str(id) + '/')['directory']
+        data = self.GET('directory/' + str(id) + '/info/')['directory']
         for k, v in data.items():
             setattr(self, k, v)
 
@@ -334,59 +335,141 @@ class Directory(Auth):
         response_data = self.POST('directory/', data)
         return Directory(self.id)
 
-    def download(self, save_path, output=False, accumulated_size=0):
+    def download(self, save_path, output=False):
         """
         Download the data associated with this directory. This returns the
-        active version of all files. It generates a log file in the `save_path`
-        that is used to enhance performance of retries and synchronizations.
+        active version of all files. It generates a cache database file in the
+        `save_path` that is used to enhance performance of retries and
+        synchronizations.
 
         :param save_path: the path to the directory on your computer that will
             contain this file's data
         :type save_path: string
         :param output: whether to print to STDOUT (defaults to false)
-        :param accumulated_size: the size that has accumulated prior to this
-            upload (defaults to 0); this is entirely for output purposes
-        :type accumulated_size: int
-        :type output: bool
+        :type output: boolean
+        :returns: the updated instance of this directory
         """
-        this_size = 0
+        accumulated_size = 0
         save_path = os.path.expanduser(save_path)
         if not os.path.isdir(save_path):
             print('Failure: %s is not a directory.' % save_path)
             exit()
 
+        # create this directory
+        save_path = save_path + '/' + self.name
         if output:
-            print('MAKE DIR %s/...' % (save_path + '/' + self.name), end='', flush=True)
+            print('CREATE DIR %s/...' % (save_path), end='', flush=True)
         try:
-            os.mkdir(save_path + '/' + self.name)
+            os.mkdir(save_path)
             if output:
                 print('created', flush=True)
         except FileExistsError:
-            if os.path.isfile(save_path + '/' + self.name):
+            if os.path.isfile(save_path):
                 print('Failure: %s is a file.' % save_path)
             else:
                 if output:
                     print('exists', flush=True)
                 pass
+        cache_path = save_path + '/.craedl-download-cache-%d.db' % (
+            self.id
+        )
+        cache = sync_cache.Cache()
+        cache.open(cache_path)
+
+        # begin the recursive download 
+        (self, this_size) = self.download_recurse(
+            cache,
+            save_path,
+            output,
+            0
+        )
+
+        if cache:
+            cache.close()
+
+        return self
+
+    def download_recurse(
+        self,
+        cache,
+        save_path,
+        output,
+        accumulated_size
+    ):
+        """
+        The recursive function that does the downloading. There is little reason
+        to call this directly; use :meth:`Directory.download` to start a
+        directory download.
+
+        :param cache: the cache database
+        :type cache: :py:class:`~craedl.cache.Cache`
+        :param save_path: the path to the directory on your computer that will
+            contain this file's data
+        :type save_path: string
+        :param output: whether to print to STDOUT (defaults to false)
+        :type output: boolean
+        :param accumulated_size: the amount of data that has been downloaded so
+            far
+        :type: integer
+        :returns: a tuple containing the updated instance of this directory and
+            the amount of data that has been downloaded by this recursion level
+            and its children
+        """
+        this_size = 0
+
+        do_download = True
+        if cache.check(save_path, self.directory_hash):
+            # no need to download
+            do_download = False
+        else:
+            # record the directory hash
+            cache.start(save_path, self.directory_hash)
 
         (dirs, files) = self.list()
-        for f in files:
-            # download child files
-            (f, new_size) = f.download(
-                save_path + '/' + self.name,
+        if do_download:
+            for f in files:
+                # download child files
+                (f, new_size) = f.download(
+                    save_path,
+                    output=output,
+                    accumulated_size=accumulated_size + this_size
+                )
+                this_size = this_size + new_size
+        else:
+            for f in files:
+                # safe to skip this file
+                if output:
+                    print('SYNCHD FIL %s...skip (%s)' % (
+                        save_path + '/' + f.name,
+                        to_x_bytes(accumulated_size + this_size)
+                    ))
+
+        for d in dirs:
+            # recurse into child directories
+            if output:
+                print('CREATE DIR %s/...' % (save_path + '/' + d.name), end='', flush=True)
+            try:
+                os.mkdir(save_path + '/' + d.name)
+                if output:
+                    print('created', flush=True)
+            except FileExistsError:
+                if os.path.isfile(save_path + '/' + d.name):
+                    print('Failure: %s is a file.' % save_path + '/' + d.name)
+                else:
+                    if output:
+                        print('exists', flush=True)
+                    pass
+
+            (d, new_size) = d.download_recurse(
+                cache,
+                save_path + '/' + d.name,
                 output=output,
                 accumulated_size=accumulated_size + this_size
             )
             this_size = this_size + new_size
 
-        for d in dirs:
-            # recurse into child directories
-            (d, new_size) = d.download(
-                save_path + '/' + self.name,
-                output=output,
-                accumulated_size = this_size
-            )
-            this_size = this_size + new_size
+        # mark download as completed in cache
+        cache.finish(save_path, self.directory_hash)
 
         return (self, this_size)
 
@@ -548,8 +631,8 @@ class Directory(Auth):
     ):
         """
         Upload a new directory contained within this directory. It generates a
-        log file in the `directory_path` that is used to enhance performance of
-        retries and synchronizations.
+        cache database in the `directory_path` that is used to enhance
+        performance of retries and synchronizations.
 
         **Note:** This method returns the updated instance of this directory
         (because it has a new child). The recommended usage is:
@@ -604,33 +687,38 @@ class Directory(Auth):
         accumulated_size
     ):
         """
-        A recursive helper function for uploading a directory.
+        The recursive function that does the uploading. There is little reason
+        to call this directly; use :meth:`Directory.upload_directory` to start a
+        directory upload.
 
-        :param directory_path: the path to the directory to be uploaded on your
-            computer
+        :param cache: the cache database
+        :type cache: :class:`Cache`
+        :param directory_path: the path to the directory on your computer that
+            will contain this file's data
         :type directory_path: string
         :param follow_symlinks: whether to follow symlinks
         :type follow_symlinks: bool
         :param output: whether to print to STDOUT
-        :type output: bool
-        :param accumulated_size: the size that has accumulated prior to this
-            recursion level
-        :type accumulated_size: int
-        :returns: a tuple containing the updated instance of this directory
-            and the size accumulated for this directory and its children
+        :type output: boolean
+        :param accumulated_size: the amount of data that has been uploaded so
+            far
+        :type: integer
+        :returns: a tuple containing the updated instance of this directory and
+            the amount of data that has been downloaded by this recursion level
+            and its children
         """
         this_size = 0
 
         children = sorted(os.scandir(directory_path), key=lambda d: d.path)
 
-        directory_hash = hash_directory_files(directory_path)
+        directory_hash = hash_directory(directory_path)
         do_upload = True
-        if cache.check_upload(directory_path, directory_hash):
+        if cache.check(directory_path, directory_hash):
             # no need to upload
             do_upload = False
         else:
             # record the directory hash
-            cache.start_upload(directory_path, directory_hash)
+            cache.start(directory_path, directory_hash)
 
         # create new directory
         if output:
@@ -640,6 +728,8 @@ class Directory(Auth):
         ):
             if output:
                 print('skip', flush=True)
+            return (self, this_size)
+
         try:
             new_dir = self.get(os.path.basename(directory_path))
             if output:
@@ -681,10 +771,9 @@ class Directory(Auth):
                     accumulated_size=accumulated_size + this_size
                 )
                 this_size = this_size + new_size
-        accumulated_size = accumulated_size + this_size
 
         # mark upload as completed in cache
-        cache.finish_upload(directory_path, directory_hash)
+        cache.finish(directory_path, directory_hash)
 
         return (self, this_size)
 
@@ -727,7 +816,7 @@ class File(Auth):
         this_size = 0
         save_path = os.path.expanduser(save_path)
         if output:
-            print('GET FILE %s...' % (save_path + '/' + self.name),
+            print('DOWNLD FIL %s...' % (save_path + '/' + self.name),
                 end='',
                 flush=True
             )
@@ -755,12 +844,13 @@ class File(Auth):
                 # directly from the stream here
                 f.write(chunk)
             f.close()
+            size = self.versions[version_index]['size']
             if output:
                 print('downloaded %s (%s)' % (
-                    to_x_bytes(self.size),
-                    to_x_bytes(self.size + accumulated_size)
+                    to_x_bytes(size),
+                    to_x_bytes(size + accumulated_size)
                 ), flush=True)
-            return (self, self.size)
+            return (self, size)
         else:
             if output:
                 print('current (%s)' % to_x_bytes(accumulated_size), flush=True)
