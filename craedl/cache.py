@@ -1,4 +1,6 @@
 import sqlite3
+import subprocess
+import sys
 
 class Cache():
     """
@@ -45,6 +47,9 @@ class Cache():
                     path varchar(1024) NOT NULL UNIQUE
                 )
             ''')
+            # make file hidden for Windows
+            if sys.platform == 'win32':
+                subprocess.check_call(['attrib', '+H', path])
 
     def check(self, dir_path, dir_hash):
         """
