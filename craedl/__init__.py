@@ -13,8 +13,12 @@
 # limitations under the License.
 
 from craedl.core import Profile
+from craedl.__main__ import main
 
 __version__ = '0.4.3'
 
 def auth():
     return Profile()
+
+def configure():
+    main()

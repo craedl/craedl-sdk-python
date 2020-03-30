@@ -16,44 +16,63 @@ import json
 
 class Connection_Refused_Error(Exception):
     def __init__(self):
-        self.message = 'Failed to establish a connection to https://api.craedl.org.'
+        self.message = '''\n
+Failed to establish a connection to https://api.craedl.org.
+'''
 
     def __str__(self):
         return self.message
 
 class Invalid_Token_Error(Exception):
     def __init__(self):
-        self.message = 'Your configured authentication token is invalid.\n'
-        self.message += '  Use `python -m craedl` to configure your authentication token.'
+        self.message = '''\n
+Your configured authentication token is invalid.
+  (A) Configure your account through a system shell:
+      `python -m craedl`
+  (B) or configure your account through a Python interpreter:
+      `import craedl; craedl.configure()`
+'''
 
     def __str__(self):
         return self.message
 
 class Missing_Token_Error(Exception):
     def __init__(self):
-        self.message = 'You have not configured an authentication token.\n'
-        self.message += '  Use `python -m craedl` to configure your authentication token.'
+        self.message = '''\n
+You have not configured an authentication token.
+  (A) Configure your account through a system shell:
+      `python -m craedl`
+  (B) or configure your account through a Python interpreter:
+      `import craedl; craedl.configure()`
+'''
 
     def __str__(self):
         return self.message
 
 class Not_Found_Error(Exception):
     def __init__(self):
-        self.message = 'The requested resource was not found.'
+        self.message = '''\n
+The requested resource was not found.
+'''
 
     def __str__(self):
         return self.message
 
 class Other_Error(Exception):
     def __init__(self):
-        self.message = 'New error encountered. Determine the response error code and create a new error class.'
+        self.message = '''\n
+New error encountered. Determine the response error code and create a new error
+class.
+'''
 
     def __str__(self):
         return self.message
 
 class Parse_Error(Exception):
     def __init__(self, details=None):
-        self.message = 'Your request included invalid parameters.'
+        self.message = '''\n
+Your request included invalid parameters.
+'''
         self.details = details
 
     def __str__(self):
@@ -61,18 +80,24 @@ class Parse_Error(Exception):
 
 class Retry_Max_Error(Exception):
     def __init__(self, details=None):
-        self.message = 'Exceeded maximum number of retries. Check network connection.'
+        self.message = '''\n
+Exceeded maximum number of retries. Check network connection.
+'''
 
     def __str__(self):
         return self.message
 
 class Server_Error(Exception):
     def __init__(self, details=None):
-        self.message = 'The server at https://api.craedl.org has encountered an error.'
+        self.message = '''\n
+The server at https://api.craedl.org has encountered an error.
+'''
 
     def __str__(self):
         return self.message
 
 class Unauthorized_Error(Exception):
     def __init__(self):
-        self.message = 'You are not authorized to access the requested resource.'
+        self.message = '''\n
+You are not authorized to access the requested resource.
+'''

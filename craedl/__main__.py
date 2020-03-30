@@ -43,7 +43,7 @@ def main():
 
         if not os.path.exists(os.path.dirname(token_path)):
             os.makedirs(os.path.dirname(token_path))
-            
+
         f = open(token_path, 'w+')
         f.write(token)
         f.close()

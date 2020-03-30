@@ -16,12 +16,19 @@ Get started with the Craedl Python SDK by obtaining it via
 pip install craedl
 ```
 
-Log into your Craedl account at [Craedl.org](https://craedl.org) and generate an API access token by
-clicking the key icon in the `My Craedl` card. Copy your token and paste it when
-prompted after running the following command:
+Log into your Craedl account at [Craedl.org](https://craedl.org) and generate an
+API access token by clicking the key icon in the `My Craedl` card. Copy your
+token and paste it when prompted after running one of the following commands:
 
+**(A) Configure your account through a system shell**
 ```
 python -m craedl
+```
+
+**(B) Configure your account through an interactive Python interpreter**
+```
+import craedl
+craedl.configure()
 ```
 
 Now you can use Python to access your Craedl, for example:
