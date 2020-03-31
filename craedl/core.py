@@ -102,11 +102,28 @@ class Auth():
     token = None
 
     if sys.platform == 'win32':
-        token_path = os.path.abspath(os.path.join(os.sep, os.path.expanduser('~'),
-            'AppData', 'Local', 'Craedl', 'craedl'))
+        token_path = os.path.abspath(
+            os.path.join(
+                os.sep,
+                os.path.expanduser('~'),
+                'AppData',
+                'Local',
+                'Craedl',
+                'craedl'
+            )
+        )
     elif sys.platform == 'darwin':
-        token_path = os.path.abspath(os.path.join(os.sep, 'Users',
-            os.getlogin(), 'Library', 'Preferences', 'Craedl', 'craedl'))
+        token_path = os.path.abspath(
+            os.path.join(
+                os.sep,
+                'Users',
+                os.getlogin(),
+                'Library',
+                'Preferences',
+                'Craedl',
+                'craedl'
+            )
+        )
     else:
         token_path = os.path.expanduser('~/.config/Craedl/craedl')
 
@@ -452,7 +469,9 @@ class Directory(Auth):
         for d in dirs:
             # recurse into child directories
             if output:
-                print('CREATE DIR %s...' % (save_path + os.sep + d.name + os.sep), end='', flush=True)
+                print('CREATE DIR %s...' % (
+                    save_path + os.sep + d.name + os.sep
+                ), end='', flush=True)
             try:
                 os.mkdir(save_path + os.sep + d.name)
                 if output:

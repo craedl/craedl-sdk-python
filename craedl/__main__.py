@@ -23,17 +23,37 @@ def main():
     authentication token.
     """
     if sys.platform == 'win32':
-        token_path = os.path.abspath(os.path.join(os.sep, os.path.expanduser('~'),
-            'AppData', 'Local', 'Craedl', 'craedl'))
+        token_path = os.path.abspath(
+            os.path.join(
+                os.sep,
+                os.path.expanduser('~'),
+                'AppData',
+                'Local',
+                'Craedl',
+                'craedl'
+            )
+        )
     elif sys.platform == 'darwin':
-        token_path = os.path.abspath(os.path.join(os.sep, 'Users',
-            os.getlogin(), 'Library', 'Preferences', 'Craedl', 'craedl'))
+        token_path = os.path.abspath(
+            os.path.join(
+                os.sep,
+                'Users',
+                os.getlogin(),
+                'Library',
+                'Preferences',
+                'Craedl',
+                'craedl'
+            )
+        )
     else:
         token_path = os.path.expanduser('~/.config/Craedl/craedl')
     argv = sys.argv
 
     if len(argv) > 1:
-        sys.exit('craedl-token configures your Craedl authentication token, which you can obtain\nfrom your Craedl account. Visit https://craedl.org/docs#api-access for more information.')
+        sys.exit('''
+This configures your Craedl authentication token, which you can obtain
+from your Craedl account. Visit https://craedl.org/docs#api-access for more
+information.''')
 
     else:
         token = getpass.getpass('Enter your token: ')
