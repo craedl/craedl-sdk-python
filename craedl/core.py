@@ -14,7 +14,6 @@
 
 from datetime import datetime
 from datetime import timezone
-from dateutil.tz import tzlocal
 import glob
 import hashlib
 import json
@@ -103,8 +102,8 @@ class Auth():
     token = None
 
     if sys.platform == 'win32':
-        token_path = os.path.abspath(os.path.join(os.sep, 'Users',
-            os.getlogin(), 'AppData', 'Local', 'Craedl', 'craedl'))
+        token_path = os.path.abspath(os.path.join(os.sep, os.path.expanduser('~'),
+            'AppData', 'Local', 'Craedl', 'craedl'))
     elif sys.platform == 'darwin':
         token_path = os.path.abspath(os.path.join(os.sep, 'Users',
             os.getlogin(), 'Library', 'Preferences', 'Craedl', 'craedl'))
@@ -353,9 +352,9 @@ class Directory(Auth):
             exit()
 
         # create this directory
-        save_path = save_path + '/' + self.name
+        save_path = save_path + os.sep + self.name
         if output:
-            print('CREATE DIR %s/...' % (save_path), end='', flush=True)
+            print('CREATE DIR %s...' % (save_path + os.sep), end='', flush=True)
         try:
             os.mkdir(save_path)
             if output:
@@ -367,7 +366,7 @@ class Directory(Auth):
                 if output:
                     print('exists', flush=True)
                 pass
-        cache_path = save_path + '/.craedl-download-cache-%d.db' % (
+        cache_path = save_path + os.sep + '.craedl-download-cache-%d.db' % (
             self.id
         )
         cache = sync_cache.Cache()
@@ -446,21 +445,21 @@ class Directory(Auth):
                 # safe to skip this file
                 if output:
                     print('SYNCHD FIL %s...skip (%s)' % (
-                        save_path + '/' + f.name,
+                        save_path + os.sep + f.name,
                         to_x_bytes(accumulated_size + this_size)
                     ))
 
         for d in dirs:
             # recurse into child directories
             if output:
-                print('CREATE DIR %s/...' % (save_path + '/' + d.name), end='', flush=True)
+                print('CREATE DIR %s...' % (save_path + os.sep + d.name + os.sep), end='', flush=True)
             try:
-                os.mkdir(save_path + '/' + d.name)
+                os.mkdir(save_path + os.sep + d.name)
                 if output:
                     print('created', flush=True)
             except FileExistsError:
-                if os.path.isfile(save_path + '/' + d.name):
-                    print('Failure: %s is a file.' % save_path + '/' + d.name)
+                if os.path.isfile(save_path + os.sep + d.name):
+                    print('Failure: %s is a file.' % save_path + os.sep + d.name)
                 else:
                     if output:
                         print('exists', flush=True)
@@ -468,7 +467,8 @@ class Directory(Auth):
 
             (d, new_size) = d.download_recurse(
                 cache,
-                save_path + '/' + d.name,
+                save_path + os.sep + d.name,
+                rescan=rescan,
                 output=output,
                 accumulated_size=accumulated_size + this_size
             )
@@ -490,34 +490,34 @@ class Directory(Auth):
         """
         if not path or path == '.':
             return self
-        if path[0] == '/':
+        if path[0] == os.sep:
             try:
                 return Directory(self.parent).get(path)
             except errors.Not_Found_Error:
-                while path.startswith('/') or path.startswith('./'):
-                    if path.startswith('/'):
+                while path.startswith(os.sep) or path.startswith('.' + os.sep):
+                    if path.startswith(os.sep):
                         path = path[1:]  # 1 = len('/')
                     else:
                         path = path[2:]  # 2 = len('./')
                 if not path or path == '.':
                     return self
-                p = path.split('/')[0]
+                p = path.split(os.sep)[0]
                 if p != self.name:
                     raise FileNotFoundError(p + ': No such file or directory')
                 path = path[len(p):]
                 if not path:
                     return self
-        while path.startswith('/') or path.startswith('./'):
-            if path.startswith('/'):
+        while path.startswith(os.sep) or path.startswith('.' + os.sep):
+            if path.startswith(os.sep):
                 path = path[1:]  # 1 = len('/')
             else:
                 path = path[2:]  # 2 = len('./')
         if not path or path == '.':
             return self
-        p = path.split('/')[0]
+        p = path.split(os.sep)[0]
         if p == '..':
             path = path[2:]  # 2 = len('..')
-            while path.startswith('/'):
+            while path.startswith(os.sep):
                 path = path[1:]  # 1 = len('/')
             try:
                 return Directory(self.parent).get(path)
@@ -526,7 +526,7 @@ class Directory(Auth):
         for c in self.children:
             if p == c['name']:
                 path = path[len(p):]
-                while path.startswith('/'):
+                while path.startswith(os.sep):
                     path = path[1:]  # 1 = len('/')
                 if path:
                     return Directory(c['id']).get(path)
@@ -604,7 +604,7 @@ class Directory(Auth):
             stream_data = True
         if stream_data:
             data = {
-                'name': file_path.split('/')[-1],
+                'name': file_path.split(os.sep)[-1],
                 'parent': self.id,
                 'size': os.path.getsize(file_path)
             }
@@ -668,7 +668,7 @@ class Directory(Auth):
             print('Failure: %s is not a directory.' % directory_path)
             exit()
 
-        cache_path = directory_path + '/.craedl-upload-cache-%d.db' % (
+        cache_path = directory_path + os.sep + '.craedl-upload-cache-%d.db' % (
             self.id
         )
         cache = sync_cache.Cache()
@@ -741,7 +741,7 @@ class Directory(Auth):
 
         # create new directory
         if output:
-            print('CREATE DIR %s/...' % (directory_path), end='', flush=True)
+            print('CREATE DIR %s...' % (directory_path + os.sep), end='', flush=True)
         if (os.path.basename(directory_path)[0] == '.'
             or os.path.basename(directory_path)[0] == '~'
         ):
@@ -763,7 +763,7 @@ class Directory(Auth):
             if not follow_symlinks and child.is_symlink():
                 # skip this symlink if ignoring symlinks
                 if output:
-                    print('SKIP SMLNK %s/...done' % (child.path), flush=True)
+                    print('SKIP SMLNK %s...done' % (child.path + os.sep), flush=True)
             elif child.is_file():
                 if do_upload:
                     # upload file
@@ -776,8 +776,8 @@ class Directory(Auth):
                 else:
                     # safe to skip this file
                     if output:
-                        print('SYNCHD FIL %s/...skip (%s)' % (
-                            child.path,
+                        print('SYNCHD FIL %s...skip (%s)' % (
+                            child.path + os.sep,
                             to_x_bytes(accumulated_size + this_size)
                         ))
             else:
@@ -836,15 +836,15 @@ class File(Auth):
         this_size = 0
         save_path = os.path.expanduser(save_path)
         if output:
-            print('DOWNLD FIL %s...' % (save_path + '/' + self.name),
+            print('DOWNLD FIL %s...' % (save_path + os.sep + self.name),
                 end='',
                 flush=True
             )
 
         # check timestamps to determine whether we should stream this data
         stream_data = True
-        if os.path.isfile(save_path + '/' + self.name):
-            local_mtime = os.path.getmtime(save_path + '/' + self.name)
+        if os.path.isfile(save_path + os.sep + self.name):
+            local_mtime = os.path.getmtime(save_path + os.sep + self.name)
             remote_mtime = (datetime.fromisoformat(
                 self.versions[version_index]['upload_date']
             ) - datetime(1970, 1, 1, tzinfo=timezone.utc)).total_seconds()
@@ -857,7 +857,7 @@ class File(Auth):
             try:
                 f = open(save_path, 'wb')
             except IsADirectoryError:
-                f = open(save_path + '/' + self.name, 'wb')
+                f = open(save_path + os.sep + self.name, 'wb')
             for chunk in data.iter_content():
                 # because we are using iter_content and GET_DATA uses stream=True
                 # in the request, the data is not read into memory but written

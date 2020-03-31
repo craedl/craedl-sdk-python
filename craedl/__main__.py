@@ -23,8 +23,8 @@ def main():
     authentication token.
     """
     if sys.platform == 'win32':
-        token_path = os.path.abspath(os.path.join(os.sep, 'Users',
-            os.getlogin(), 'AppData', 'Local', 'Craedl', 'craedl'))
+        token_path = os.path.abspath(os.path.join(os.sep, os.path.expanduser('~'),
+            'AppData', 'Local', 'Craedl', 'craedl'))
     elif sys.platform == 'darwin':
         token_path = os.path.abspath(os.path.join(os.sep, 'Users',
             os.getlogin(), 'Library', 'Preferences', 'Craedl', 'craedl'))
