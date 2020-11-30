@@ -25,7 +25,7 @@ import time
 from craedl import cache as sync_cache
 from craedl import errors
 
-BUF_SIZE = 104857600
+BUF_SIZE = 10485760
 RETRY_MAX = 5
 RETRY_SLEEP = 1
 
