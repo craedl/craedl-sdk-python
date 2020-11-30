@@ -46,4 +46,31 @@ Upload data
     directory_new = directory.get('new-directory-name')
 
     # upload a new file into directory_new
-    directory_new = directory_new.upload_file('/path/on/local/computer/to/read/data')
+    directory_new = directory_new.upload_file(
+        '/path/on/local/computer/to/read/data'
+    )
+
+Upload directory recursively
+****************************
+
+.. code-block:: python
+
+    import craedl
+    profile = craedl.auth()
+
+    # get a research group's project
+    research_group = p.get_research_group('url-slug-goes-here')
+    project = research_group.get_project('Project Name Goes Here')
+
+    # choose the destination directory within the project
+    # this uses the root directory for the project by default
+    home = project.get_data()
+
+    # upload the directory recursively
+    # this incantation of upload_directory() will pick up from where it left off
+    # if it is stopped for any reason
+    home = home.upload_directory(
+        '/path/on/local/computer/to/read/data',
+        rescan=False, # ignores new children in directories already transferred
+        output=True # outputs progress to STDOUT
+    )
