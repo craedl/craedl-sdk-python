@@ -946,7 +946,7 @@ class Profile(Auth):
 
         :returns: a list of projects
         """
-        data = self.GET('profile/' + str(self.id) + '/projects/')
+        data = self.GET('project/')
         projects = list()
         for project in data:
             projects.append(Project(project['id']))
