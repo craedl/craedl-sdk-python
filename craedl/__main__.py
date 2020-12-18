@@ -17,7 +17,7 @@ import os
 import stat
 import sys
 
-def main():
+def main(token=None):
     """
     The ``craedl-token`` console script entry point for configuring the Craedl
     authentication token.
@@ -56,7 +56,8 @@ from your Craedl account. Visit https://craedl.org/docs#api-access for more
 information.''')
 
     else:
-        token = getpass.getpass('Enter your token: ')
+        if token is None:
+            token = getpass.getpass('Enter your token: ')
 
         if len(token) != 40:
             sys.exit('The provided token is invalid.')

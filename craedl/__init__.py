@@ -19,6 +19,6 @@ __version__ = '0.5.3'
 def auth():
     return Profile()
 
-def configure():
+def configure(token=None):
     from craedl.__main__ import main
-    main()
+    main(token)
