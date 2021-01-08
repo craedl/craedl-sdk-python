@@ -29,6 +29,18 @@ BUF_SIZE = 10485760
 RETRY_MAX = 5
 RETRY_SLEEP = 1
 
+##########
+import requests.packages.urllib3.util.connection as urllib3_cn
+import socket
+"""
+Forces systems that default to IPv6 to use IPv4.
+"""
+def allowed_gai_family():
+    family = socket.AF_INET    # force IPv4
+    return family
+urllib3_cn.allowed_gai_family = allowed_gai_family
+##########
+
 def get_numbered_upload(parent, childname):
     """
     If a File/Directory comes back instead of a Directory/File, we know this
