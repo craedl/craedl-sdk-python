@@ -798,7 +798,7 @@ class Directory(Auth):
                         print('SYNCHD FIL %s...skip (%s)' % (
                             child.path + os.sep,
                             to_x_bytes(accumulated_size + this_size)
-                        ))
+                        ), flush=True)
             else:
                 # recurse into this directory
                 (new_dir, new_size) = new_dir.upload_directory_recurse(
