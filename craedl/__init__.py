@@ -1,4 +1,4 @@
-# Copyright 2019 The Johns Hopkins University
+# Copyright 2022 The Johns Hopkins University
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 from craedl.core import Profile
 
-__version__ = '0.5.5'
+__version__ = '1.0.0'
 
 def auth():
     return Profile()

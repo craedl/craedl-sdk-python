@@ -17,8 +17,8 @@ pip install craedl
 ```
 
 Log into your Craedl account at [Craedl.org](https://craedl.org) and generate an
-API access token by clicking the key icon in the `My Craedl` card. Copy your
-token and paste it when prompted after running one of the following commands:
+API access token by clicking the key tab in your profile view. Copy your token
+and paste it when prompted after running one of the following commands:
 
 **(A) Configure your account through a system shell**
 ```
@@ -36,8 +36,8 @@ Now you can use Python to access your Craedl, for example:
 ```
 import craedl
 profile = craedl.auth()
-for project in profile.get_projects():
-    print(project.name)
+for craedl in profile.craedls:
+    print(craedl)
 ```
 
 ## More information

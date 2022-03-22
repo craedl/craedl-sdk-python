@@ -1,8 +1,7 @@
 The basics
 ==========
 
-The Craedl Python SDK is, ultimately, a wrapper around the Craedl RESTful API,
-which is documented at `api.craedl.org <https://api.craedl.org>`_.
+The Craedl Python SDK is, ultimately, a wrapper around the Craedl RESTful API.
 Through the RESTful API, you can do just about anything in code that you can do
 in the Craedl web site, as long as you don't mind composing commands like this
 one and then manually parsing the JSON response:
@@ -39,12 +38,10 @@ Configure your authentication token
 ***********************************
 
 Retrieve your API access token from your Craedl account by logging into
-`Craedl.org <https://craedl.org>`_ and clicking the key icon in the
-``My Craedl`` card. Generate a token and pass it to one of the following
-commands when prompted:
+`Craedl.org <https://craedl.org>`_ and clicking the key tab in your profile.
+Generate a token and pass it to one of the following commands when prompted:
 
 **(A) Configure your account through a system shell**
-
 
 .. code-block:: bash
 
@@ -57,10 +54,10 @@ commands when prompted:
     import craedl
     craedl.configure()
 
-As long as you don't revoke this token or generate a new one, you will only have
-to perform this step once every 28 days. Should you have reason to worry that
-your token has been compromised, simply generate a new one in Craedl and re-run
-the command above to re-enable your Craedl Python SDK authentication.
+This token will remain active indefinitely. Should you have reason to worry that
+your token has been compromised, use the interface in your Craedl profile to
+revoke the compromised token, generate a new one, and re-run the command above
+to enable your Craedl Python SDK authentication.
 
 Use the Craedl Python SDK
 *************************
