@@ -19,6 +19,7 @@ import hashlib
 import json
 import os
 import requests
+from requests_toolbelt import MultipartEncoder
 import sys
 import time
 
@@ -123,7 +124,6 @@ class Auth():
       self.host = host
     else:
       self.host = 'https://api.craedl.org'
-      self.host = 'https://api.craedl.test' # XXX
 
   def __repr__(self):
     string = '{'
@@ -156,7 +156,6 @@ class Auth():
         response = requests.delete(
           self.host + path,
           headers={'Authorization': 'Bearer %s' % self.token},
-          verify=False, # XXX
         )
         return self.process_response(response)
       except requests.exceptions.ConnectionError:
@@ -185,7 +184,6 @@ class Auth():
           response = requests.get(
             self.host + path,
             headers={'Authorization': 'Bearer %s' % self.token},
-            verify=False, # XXX
           )
           return self.process_response(response)
         else:
@@ -193,14 +191,13 @@ class Auth():
             self.host + path,
             headers={'Authorization': 'Bearer %s' % self.token},
             stream=True,
-            verify=False, # XXX
           )
           return response
       except requests.exceptions.ConnectionError:
         time.sleep(RETRY_SLEEP)
     raise errors.Retry_Max_Error
 
-  def POST(self, path, data, file=None):
+  def POST(self, path, data, filepath=None):
     """
     Handle a POST request.
 
@@ -209,35 +206,39 @@ class Auth():
     :param data: the data to POST to the RESTful API method as described at
       https://api.craedl.org
     :type data: dict
-    :param file: the file to be passed
-    :type file: file
+    :param filepath: the path to the file to be passed
+    :type filepath: string
     :returns: a dict containing the contents of the parsed JSON response or
       an HTML error string if the response does not have status 200
     """
-    # TODO TODO TODO make work with files larger than 2GB
     if not self.token:
       self.token = open(os.path.expanduser(self.token_path)).readline().strip()
     attempt = 0
     while attempt < RETRY_MAX:
       attempt = attempt + 1
       try:
-        if not file:
+        if not filepath:
           response = requests.post(
             self.host + path,
             json=data,
             headers={'Authorization': 'Bearer %s' % self.token},
-            verify=False, # XXX
           )
         else:
-          response = requests.post(
-            self.host + path,
-            data=data,
-            files={
-              'file': file,
-            },
-            headers={'Authorization': 'Bearer %s' % self.token},
-            verify=False, # XXX
-          )
+          d = data
+          for k in d:
+            if type(d[k]) != str:
+              d[k] = str(d[k])
+          with open(filepath, 'rb') as f:
+            d['file'] = (filepath.split(os.sep)[-1], f, 'application/octet-stream')
+            encoder = MultipartEncoder(d)
+            response = requests.post(
+              self.host + path,
+              data=encoder,
+              headers={
+                'Authorization': 'Bearer %s' % self.token,
+                'Content-Type': encoder.content_type
+              },
+            )
         return self.process_response(response)
       except requests.exceptions.ConnectionError:
         time.sleep(RETRY_SLEEP)
@@ -762,16 +763,15 @@ class Inode(Auth):
     except FileNotFoundError:
       stream_data = True
     if stream_data:
-      with open(file_path, 'rb') as f:
-        data = {
-          'name': file_path.split(os.sep)[-1],
-          'parent': self.id,
-          'type': 'f',
-        }
-        response_data = self.POST('/mech/%s/craedl/%d/inode/' % (
-          self.craedl.slug,
-          self.craedl.id,
-        ), data, f)
+      data = {
+        'name': file_path.split(os.sep)[-1],
+        'parent': self.id,
+        'type': 'f',
+      }
+      response_data = self.POST('/mech/%s/craedl/%d/inode/' % (
+        self.craedl.slug,
+        self.craedl.id,
+      ), data, file_path)
       size = response_data['size']
       if output:
         print('uploaded %s (%s)' % (
