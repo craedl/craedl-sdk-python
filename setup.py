@@ -4,7 +4,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 # 
-#     http://www.apache.org/licenses/LICENSE-2.0
+#   http://www.apache.org/licenses/LICENSE-2.0
 # 
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,35 +14,36 @@
 
 import setuptools
 
-from craedl import __version__
+with open('version.py', 'r') as f:
+  exec(f.read())
 
-with open("README.md", "r") as fh:
-    long_description = fh.read()
+with open('README.md', 'r') as fh:
+  long_description = fh.read()
 
 setuptools.setup(
-    name='craedl',
-    version=__version__,
-    author='Craedl.org',
-    author_email='webmaster@craedl.org',
-    description='A Python SDK for Craedl',
-    long_description=long_description,
-    long_description_content_type='text/markdown',
-    url='https://github.com/craedl/craedl-sdk-python',
-    packages=setuptools.find_packages(),
-    classifiers=[
-        'Programming Language :: Python :: 3',
-        'License :: OSI Approved :: Apache Software License',
-        'Operating System :: OS Independent',
+  name='craedl',
+  version=__version__,
+  author='Craedl.org',
+  author_email='webmaster@craedl.org',
+  description='A Python SDK for Craedl',
+  long_description=long_description,
+  long_description_content_type='text/markdown',
+  url='https://github.com/craedl/craedl-sdk-python',
+  packages=setuptools.find_packages(),
+  classifiers=[
+    'Programming Language :: Python :: 3',
+    'License :: OSI Approved :: Apache Software License',
+    'Operating System :: OS Independent',
+  ],
+  python_requires='>=3.7',
+  install_requires=[
+    'python-dateutil',
+    'requests',
+    'requests_toolbelt',
+  ],
+  entry_points = {
+    'console_scripts': [
+      'craedl-token=craedl.__main__:main',
     ],
-    python_requires='>=3.7',
-    install_requires=[
-        'python-dateutil',
-        'requests',
-        'requests_toolbelt',
-    ],
-    entry_points = {
-        'console_scripts': [
-            'craedl-token=craedl.__main__:main',
-        ],
-    },
+  },
 )
