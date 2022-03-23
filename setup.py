@@ -39,7 +39,7 @@ setuptools.setup(
   install_requires=[
     'python-dateutil',
     'requests',
-    'requests_toolbelt',
+    'requests-toolbelt',
   ],
   entry_points = {
     'console_scripts': [
