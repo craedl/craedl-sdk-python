@@ -14,7 +14,7 @@
 
 import setuptools
 
-with open('version.py', 'r') as f:
+with open('craedl/version.py', 'r') as f:
   exec(f.read())
 
 with open('README.md', 'r') as fh:
