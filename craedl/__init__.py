@@ -14,7 +14,7 @@
 
 from craedl.core import Profile
 
-from version import __version__
+from .version import __version__
 
 def auth():
     return Profile()
